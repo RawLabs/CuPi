@@ -45,7 +45,7 @@ Place an empty `portable.flag` beside the executable (or source entry point) to 
 * **Self-Hiding Companion**: Companion window temporarily hides during capture so it never overlays the captured image.
 
 ### 4. 🖼️ Editable Capture Steps & Screen Saving
-* **Capture & Ask AI**: Captures the selected target and immediately sends it with your request to AI.
+* **Add Capture**: Captures the selected target and adds it to your editable guide steps only. Nothing is sent to AI until you choose **Ask AI**.
 * **Save Screenshot**: Instantly captures target window/screen and saves numbered images (`capture_step_01_...png`) to `~/Pictures/AI_Companion_Captures/` without sending them to AI.
 * **Editable Capture Tray**: Accumulate multiple captures as guide steps. Every pending step can be annotated again or removed without restarting the capture session.
 
@@ -103,7 +103,7 @@ another workspace without switching to it. Build it once, then launch normally:
 ```
 
 Choose a window labelled with its workspace in **Source**, stay on your current
-workspace, and use **Preview** or **Capture & Ask AI**. If clean capture cannot
+workspace, and use **Preview** or **Add Capture**. If clean capture cannot
 run, the app fails safely instead of capturing the current workspace at the
 same screen coordinates.
 
@@ -140,8 +140,11 @@ Pytest initializes one shared offscreen Qt application for image and widget test
 
 1. **Adjust Size & Transparency**: Use header **👁️ opacity slider** or drag window edges to position companion.
 2. **Select Source & Model**: Choose a target window or display from the **Source** dropdown and pick an active model.
-3. **Capture or Draft a Guide**:
-   * Click **`🛡️ Watchdog`** for passive background error detection.
-   * Select a guide format, capture one or more screens, edit any step as needed, then click **✦ Ask AI**.
-   * Click **💾 Save Screenshot** to save a PNG without sending it for analysis.
+3. **Build a Guide**:
+   * Click **Preview** to inspect a capture without saving or sending it.
+   * Click **＋ Add Capture** to make an editable guide step without sending it to AI.
+   * Select a guide format, write your request, then click **✦ Ask AI**.
+   * Click **💾 Save PNG** to save a capture to disk only.
 4. **Export**: Use **📄 Export Guide** on the AI response to create a Markdown/HTML evidence bundle.
+
+Sentinel is optional background monitoring and is available under **Options** so it does not distract from the normal capture workflow.

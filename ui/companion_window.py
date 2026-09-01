@@ -232,7 +232,12 @@ class CompanionWindow(QMainWindow):
         self.preview_btn.setObjectName("SecondaryButton")
         self.preview_btn.setToolTip("Preview exactly what will be captured")
         self.preview_btn.clicked.connect(self.preview_capture)
+        self.add_capture_btn = QPushButton("＋ Add Capture")
+        self.add_capture_btn.setObjectName("ActionButton")
+        self.add_capture_btn.setToolTip("Capture the selected source and add it to your guide steps without sending it to AI")
+        self.add_capture_btn.clicked.connect(self.capture_to_guide)
         preview_row.addWidget(self.preview_btn)
+        preview_row.addWidget(self.add_capture_btn)
         preview_row.addWidget(self.selected_sources_lbl, 1)
 
         # Capture mode is explicit and separate from choosing a window/monitor.
@@ -274,7 +279,8 @@ class CompanionWindow(QMainWindow):
         model_row.addWidget(self.model_combo, 1)
         model_row.addWidget(self.adv_toggle_btn)
 
-        # Row C: Sentinel Watchdog Controls & Status Row
+        # Sentinel is an advanced, optional background monitor—not part of the
+        # normal capture-and-guide workflow.
         watchdog_row = QHBoxLayout()
         watchdog_row.setSpacing(6)
 
@@ -292,7 +298,6 @@ class CompanionWindow(QMainWindow):
         visible_layout.addWidget(self.capture_status_lbl)
         visible_layout.addLayout(capture_mode_row)
         visible_layout.addLayout(model_row)
-        visible_layout.addLayout(watchdog_row)
         content_layout.addWidget(visible_controls)
 
         # 3. Advanced Options Panel (Collapsed by Default)
@@ -358,6 +363,7 @@ class CompanionWindow(QMainWindow):
 
         adv_layout.addLayout(provider_row)
         adv_layout.addLayout(filter_row)
+        adv_layout.addLayout(watchdog_row)
 
         self.adv_panel.setVisible(False)  # Collapsed by default
         content_layout.addWidget(self.adv_panel)
@@ -445,17 +451,7 @@ class CompanionWindow(QMainWindow):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(6)
 
-        self.check_screen_btn = QPushButton("📸 Capture & Ask AI")
-        self.check_screen_btn.setObjectName("CheckScreenButton")
-        self.check_screen_btn.setToolTip("Capture the selected target and send it to AI for analysis")
-        self.check_screen_btn.clicked.connect(self.check_screen_now)
-
-        self.annotate_screen_btn = QPushButton("✏️ Annotate")
-        self.annotate_screen_btn.setObjectName("SecondaryButton")
-        self.annotate_screen_btn.setToolTip("Capture the selected source and annotate it before using it")
-        self.annotate_screen_btn.clicked.connect(self.capture_and_annotate)
-
-        self.save_screen_btn = QPushButton("💾 Save")
+        self.save_screen_btn = QPushButton("💾 Save PNG")
         self.save_screen_btn.setObjectName("SecondaryButton")
         self.save_screen_btn.setToolTip("Capture the selected target and save a PNG file only")
         self.save_screen_btn.clicked.connect(self.capture_and_save_screen)
@@ -467,10 +463,9 @@ class CompanionWindow(QMainWindow):
 
         self.size_grip = QSizeGrip(self)
 
-        actions_row.addWidget(self.check_screen_btn, 3)
-        actions_row.addWidget(self.annotate_screen_btn, 3)
-        actions_row.addWidget(self.save_screen_btn, 3)
-        actions_row.addWidget(self.clear_chat_btn, 2)
+        actions_row.addWidget(self.save_screen_btn, 1)
+        actions_row.addWidget(self.clear_chat_btn, 1)
+        actions_row.addStretch()
         actions_row.addWidget(self.size_grip, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
         input_layout.addLayout(actions_row)
 
@@ -521,11 +516,8 @@ class CompanionWindow(QMainWindow):
 
     def add_system_welcome(self):
         msg = (
-            "Hello! I am your Screen-Aware Work Companion.\n\n"
-            "• Select your target window or screen above.\n"
-            "• Click 'Capture & AI Analyze' to capture the target and ask AI for guidance.\n"
-            "• Click 'Capture & Save' to save a PNG without sending it to AI.\n"
-            "• I view your screen when you ask and guide you step-by-step."
+            "Choose a source, then use **Preview** to check it or **Add Capture** to collect guide steps. "
+            "Nothing is sent to AI until you write a request and choose **Ask AI**."
         )
         widget = ChatMessageWidget("assistant", msg)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, widget)
@@ -694,14 +686,9 @@ class CompanionWindow(QMainWindow):
         if self.platform.name != "linux-wayland":
             self.capture_status_lbl.clear()
             return
-        if target and target.target_type == "window":
-            message = "Hyprland: clean app capture works across workspaces when the native helper is available; no workspace switch occurs."
-        elif target and target.target_type == "region":
-            message = "Wayland: selected area will be captured through the compositor."
-        else:
-            message = "Wayland: selected display will be captured through the compositor."
-        self.capture_status_lbl.setText(f"ⓘ {message}")
-        self.capture_status_lbl.setStyleSheet("color: #94a3b8; font-size: 10px;")
+        # Keep this area quiet during normal work. It is reserved for a
+        # successful capture notice or an actionable failure.
+        self.capture_status_lbl.clear()
 
     def _capture_targets(self) -> list[SourceTarget]:
         """Return the committed multi-source selection, or the current source."""
@@ -1101,6 +1088,24 @@ class CompanionWindow(QMainWindow):
             prompt = "Check the screen and provide guidance on what is visible."
         self.send_query_with_prompt(prompt)
 
+    def capture_to_guide(self):
+        """Capture only: queue evidence for editing or a later AI request."""
+        if not self.active_target:
+            self._refresh_sources()
+        targets = self._capture_targets()
+        if not targets:
+            self._show_capture_error("No capture target is available. Refresh the source list and select a screen or area.")
+            return
+        pixmaps = self._capture_targets_now(targets)
+        if not pixmaps:
+            self._show_capture_error()
+            return
+        self.attached_pixmaps.extend(pixmaps)
+        self.attached_images_b64.extend(pixmap_to_b64(pixmap) for pixmap in pixmaps)
+        self._show_attached_badge()
+        self.capture_status_lbl.setText(f"✓ Added {len(pixmaps)} capture{'s' if len(pixmaps) != 1 else ''} to guide steps. Edit them below or ask AI when ready.")
+        self.capture_status_lbl.setStyleSheet("color: #86efac; font-size: 10px;")
+
     def _save_pixmap_to_disk(self, pixmap: QPixmap) -> Optional[str]:
         if not pixmap or pixmap.isNull():
             return None
@@ -1282,9 +1287,9 @@ class CompanionWindow(QMainWindow):
 
         # Disable inputs while inference runs and show loading indicator
         self.send_btn.setEnabled(False)
-        self.check_screen_btn.setEnabled(False)
+        self.add_capture_btn.setEnabled(False)
         self.send_btn.setText("⏳ Thinking...")
-        self.check_screen_btn.setText("⏳ Analyzing...")
+        self.add_capture_btn.setText("⏳ Working...")
 
         # Launch async inference worker
         base_url = self.config.get("openrouter_url") if provider == "openrouter" else self.config.get("lmstudio_url")
@@ -1340,9 +1345,9 @@ class CompanionWindow(QMainWindow):
         self.conversation.add_assistant_message(clean_text)
 
         self.send_btn.setText("✦ Ask AI")
-        self.check_screen_btn.setText("📸 Capture & Ask AI")
+        self.add_capture_btn.setText("＋ Add Capture")
         self.send_btn.setEnabled(True)
-        self.check_screen_btn.setEnabled(True)
+        self.add_capture_btn.setEnabled(True)
 
     def _handle_doc_export(self, response_text: str, attached_pixmaps: list, guide_type: str = ""):
         try:
@@ -1384,9 +1389,9 @@ class CompanionWindow(QMainWindow):
         self.scroll_to_bottom()
 
         self.send_btn.setText("✦ Ask AI")
-        self.check_screen_btn.setText("📸 Capture & Ask AI")
+        self.add_capture_btn.setText("＋ Add Capture")
         self.send_btn.setEnabled(True)
-        self.check_screen_btn.setEnabled(True)
+        self.add_capture_btn.setEnabled(True)
 
     def clear_chat(self):
         self.conversation.clear()

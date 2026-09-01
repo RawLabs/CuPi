@@ -136,7 +136,7 @@ QWidget#ChatStream {
 
 /* Chat Message Bubbles */
 QWidget#UserBubble {
-    background-color: #0369a1;
+    background-color: #0c4a6e;
     border-radius: 10px;
     padding: 8px 12px;
 }
