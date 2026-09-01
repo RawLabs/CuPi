@@ -415,7 +415,7 @@ class CompanionWindow(QMainWindow):
         self.prompt_input.return_pressed.connect(self.send_query)
         self.prompt_input.escape_pressed.connect(self._handle_escape_key)
 
-        self.send_btn = QPushButton("✦ Draft with AI")
+        self.send_btn = QPushButton("✦ Ask AI")
         self.send_btn.setObjectName("ActionButton")
         self.send_btn.setToolTip("Send prompt to companion (Enter to send, Shift+Enter for newline)")
         self.send_btn.clicked.connect(self.send_query)
@@ -425,7 +425,7 @@ class CompanionWindow(QMainWindow):
         input_layout.addLayout(prompt_row)
 
         guide_row = QHBoxLayout()
-        guide_label = QLabel("Draft as:")
+        guide_label = QLabel("Guide format:")
         guide_label.setStyleSheet("font-size: 11px; color: #7dd3fc; font-weight: bold;")
         self.guide_type_combo = QComboBox()
         self.guide_type_combo.addItems([
@@ -445,7 +445,7 @@ class CompanionWindow(QMainWindow):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(6)
 
-        self.check_screen_btn = QPushButton("📸 Capture + Draft")
+        self.check_screen_btn = QPushButton("📸 Capture & Ask AI")
         self.check_screen_btn.setObjectName("CheckScreenButton")
         self.check_screen_btn.setToolTip("Capture the selected target and send it to AI for analysis")
         self.check_screen_btn.clicked.connect(self.check_screen_now)
@@ -885,7 +885,11 @@ class CompanionWindow(QMainWindow):
         self.preview_btn.setEnabled(False)
         try:
             pixmaps = self._capture_targets_now(targets)
-            self._show_preview(pixmaps, self.last_capture_targets or targets)
+            if pixmaps:
+                self._show_preview(pixmaps, self.last_capture_targets or targets)
+            else:
+                self._show_preview([], targets)
+                self._show_capture_error()
         finally:
             self.preview_btn.setEnabled(True)
 
@@ -1335,8 +1339,8 @@ class CompanionWindow(QMainWindow):
 
         self.conversation.add_assistant_message(clean_text)
 
-        self.send_btn.setText("✦ Draft with AI")
-        self.check_screen_btn.setText("📸 Capture + Draft")
+        self.send_btn.setText("✦ Ask AI")
+        self.check_screen_btn.setText("📸 Capture & Ask AI")
         self.send_btn.setEnabled(True)
         self.check_screen_btn.setEnabled(True)
 
@@ -1379,8 +1383,8 @@ class CompanionWindow(QMainWindow):
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, err_widget)
         self.scroll_to_bottom()
 
-        self.send_btn.setText("✦ Draft with AI")
-        self.check_screen_btn.setText("📸 Capture + Draft")
+        self.send_btn.setText("✦ Ask AI")
+        self.check_screen_btn.setText("📸 Capture & Ask AI")
         self.send_btn.setEnabled(True)
         self.check_screen_btn.setEnabled(True)
 

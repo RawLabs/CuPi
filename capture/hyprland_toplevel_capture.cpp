@@ -210,10 +210,15 @@ int main(int argc, char** argv) {
 
     char* end = nullptr;
     unsigned long long parsed = std::strtoull(argv[1], &end, 0);
-    if (!end || *end != '\0' || parsed > std::numeric_limits<uint32_t>::max()) {
+    if (!end || *end != '\0') {
         std::fprintf(stderr, "invalid Hyprland window address: %s\n", argv[1]);
         return 2;
     }
+
+    // `hyprctl clients` prints a native-width hexadecimal address while the
+    // version-1 Wayland protocol accepts its lower 32-bit handle. Rejecting a
+    // normal 64-bit address made every clean capture fail on current systems.
+    const uint32_t handle = static_cast<uint32_t>(parsed);
 
     wl_display* display = wl_display_connect(nullptr);
     if (!display) {
@@ -232,7 +237,7 @@ int main(int argc, char** argv) {
 
     FrameState frame_state;
     auto* frame = hyprland_toplevel_export_manager_v1_capture_toplevel(
-        registry_state.manager, 0, static_cast<uint32_t>(parsed));
+        registry_state.manager, 0, handle);
     if (!frame || hyprland_toplevel_export_frame_v1_add_listener(
                      frame, &FRAME_LISTENER, &frame_state) < 0) {
         std::fprintf(stderr, "could not create Hyprland capture frame\n");
