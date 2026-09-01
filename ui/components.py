@@ -8,10 +8,11 @@ from PyQt6.QtGui import QPixmap, QImage, QIcon, QFont, QKeyEvent
 class ChatMessageWidget(QWidget):
     export_requested = pyqtSignal(str, list, str)
 
-    def __init__(self, role: str, text: str, pixmap: QPixmap = None, pixmaps: list = None, guide_type: str = "", parent=None):
+    def __init__(self, role: str, text: str, pixmap: QPixmap = None, pixmaps: list = None, guide_type: str = "", production_mode: bool = False, parent=None):
         super().__init__(parent)
         self.text = text
         self.guide_type = guide_type
+        self.production_mode = production_mode
         self.pixmaps = list(pixmaps) if pixmaps else ([pixmap] if (pixmap and not pixmap.isNull()) else [])
 
         layout = QVBoxLayout(self)
@@ -27,7 +28,7 @@ class ChatMessageWidget(QWidget):
 
         # Header role / timestamp
         meta_layout = QHBoxLayout()
-        role_label = QLabel("YOU" if is_user else "COMPANION")
+        role_label = QLabel("YOU" if is_user else ("PRODUCTION" if production_mode else "COMPANION"))
         role_label.setObjectName("MessageMeta")
         role_label.setStyleSheet("font-weight: bold; color: " + ("#e0f2fe;" if is_user else "#38bdf8;"))
         
@@ -38,7 +39,7 @@ class ChatMessageWidget(QWidget):
         meta_layout.addWidget(role_label)
         meta_layout.addStretch()
 
-        if not is_user:
+        if production_mode:
             export_btn = QPushButton("📄 Export Guide")
             export_btn.setObjectName("TitleButton")
             export_btn.setStyleSheet("font-size: 10px; color: #38bdf8; font-weight: bold; padding: 1px 4px;")
@@ -139,9 +140,9 @@ class AttachedImageBadge(QWidget):
 
         count = len(pixmaps) if pixmaps else 0
         header = QHBoxLayout()
-        lbl = QLabel(f"📚 Guide steps · {count} capture{'s' if count != 1 else ''}")
+        lbl = QLabel("📷 Current snapshot" if count == 1 else f"📷 {count} snapshots")
         lbl.setStyleSheet("color: #7dd3fc; font-size: 11px; font-weight: bold;")
-        hint = QLabel("Edit any step before drafting with AI")
+        hint = QLabel("Edit or replace before asking AI")
         hint.setStyleSheet("color: #94a3b8; font-size: 10px;")
         header.addWidget(lbl)
         header.addStretch()

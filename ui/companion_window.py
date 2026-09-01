@@ -214,8 +214,6 @@ class CompanionWindow(QMainWindow):
 
         source_row.addWidget(source_label)
         source_row.addWidget(self.source_combo, 1)
-        source_row.addWidget(self.add_source_btn)
-        source_row.addWidget(self.clear_sources_btn)
         source_row.addWidget(self.refresh_sources_btn)
 
         self.selected_sources_lbl = QLabel("Capture source: current selection")
@@ -249,6 +247,19 @@ class CompanionWindow(QMainWindow):
         capture_mode_row.addWidget(self.full_screen_btn)
         capture_mode_row.addWidget(self.picker_btn)
         capture_mode_row.addStretch()
+
+        production_row = QHBoxLayout()
+        production_label = QLabel("Produce:")
+        production_label.setStyleSheet("font-size: 11px; color: #7dd3fc; font-weight: bold;")
+        self.guide_type_combo = QComboBox()
+        self.guide_type_combo.addItems([
+            "Work Instruction", "SOP", "Teaching Guide", "Study Guide", "Quick Reference",
+        ])
+        self.guide_type_combo.setToolTip("Choose the production to create from the current snapshot")
+        self.guide_type_combo.currentTextChanged.connect(self._on_guide_type_changed)
+        production_row.addWidget(production_label)
+        production_row.addWidget(self.guide_type_combo)
+        production_row.addStretch()
 
         # Row B: Selected Model Status & Options Toggle
         model_row = QHBoxLayout()
@@ -297,7 +308,7 @@ class CompanionWindow(QMainWindow):
         visible_layout.addLayout(preview_row)
         visible_layout.addWidget(self.capture_status_lbl)
         visible_layout.addLayout(capture_mode_row)
-        visible_layout.addLayout(model_row)
+        visible_layout.addLayout(production_row)
         content_layout.addWidget(visible_controls)
 
         # 3. Advanced Options Panel (Collapsed by Default)
@@ -363,6 +374,7 @@ class CompanionWindow(QMainWindow):
 
         adv_layout.addLayout(provider_row)
         adv_layout.addLayout(filter_row)
+        adv_layout.addLayout(model_row)
         adv_layout.addLayout(watchdog_row)
 
         self.adv_panel.setVisible(False)  # Collapsed by default
@@ -397,10 +409,7 @@ class CompanionWindow(QMainWindow):
         self.scroll_area.setWidget(self.chat_stream)
         content_layout.addWidget(self.scroll_area, 1)
 
-        # Welcome message
-        self.add_system_welcome()
-
-        # 5. Screenshot Attachment Badge Container
+        # Current snapshot controls
         self.badge_container = QWidget()
         self.badge_layout = QHBoxLayout(self.badge_container)
         self.badge_layout.setContentsMargins(4, 0, 4, 0)
@@ -417,7 +426,7 @@ class CompanionWindow(QMainWindow):
         prompt_row = QHBoxLayout()
         self.prompt_input = PromptTextEdit()
         self.prompt_input.setObjectName("PromptInput")
-        self.prompt_input.setPlaceholderText("Describe the guide or ask AI to draft the next step…")
+        self.prompt_input.setPlaceholderText("What should this production explain?")
         self.prompt_input.return_pressed.connect(self.send_query)
         self.prompt_input.escape_pressed.connect(self._handle_escape_key)
 
@@ -429,23 +438,6 @@ class CompanionWindow(QMainWindow):
         prompt_row.addWidget(self.prompt_input, 1)
         prompt_row.addWidget(self.send_btn)
         input_layout.addLayout(prompt_row)
-
-        guide_row = QHBoxLayout()
-        guide_label = QLabel("Guide format:")
-        guide_label.setStyleSheet("font-size: 11px; color: #7dd3fc; font-weight: bold;")
-        self.guide_type_combo = QComboBox()
-        self.guide_type_combo.addItems([
-            "Work Instruction", "SOP", "Teaching Guide", "Study Guide", "Quick Reference",
-        ])
-        self.guide_type_combo.setToolTip("Choose the kind of guide AI should draft from your captured steps")
-        self.guide_type_combo.currentTextChanged.connect(self._on_guide_type_changed)
-        guide_hint = QLabel("Capture → edit steps → draft → export")
-        guide_hint.setStyleSheet("font-size: 10px; color: #94a3b8;")
-        guide_row.addWidget(guide_label)
-        guide_row.addWidget(self.guide_type_combo)
-        guide_row.addStretch()
-        guide_row.addWidget(guide_hint)
-        input_layout.addLayout(guide_row)
 
         # Action Buttons & Resize Grip Row
         actions_row = QHBoxLayout()
@@ -1100,10 +1092,10 @@ class CompanionWindow(QMainWindow):
         if not pixmaps:
             self._show_capture_error()
             return
-        self.attached_pixmaps.extend(pixmaps)
-        self.attached_images_b64.extend(pixmap_to_b64(pixmap) for pixmap in pixmaps)
+        self.attached_pixmaps = [pixmaps[0]]
+        self.attached_images_b64 = [pixmap_to_b64(pixmaps[0])]
         self._show_attached_badge()
-        self.capture_status_lbl.setText(f"✓ Added {len(pixmaps)} capture{'s' if len(pixmaps) != 1 else ''} to guide steps. Edit them below or ask AI when ready.")
+        self.capture_status_lbl.setText("✓ Snapshot ready. Edit it below or ask AI when ready.")
         self.capture_status_lbl.setStyleSheet("color: #86efac; font-size: 10px;")
 
     def _save_pixmap_to_disk(self, pixmap: QPixmap) -> Optional[str]:
@@ -1203,10 +1195,10 @@ class CompanionWindow(QMainWindow):
             badge = AttachedImageBadge(self.attached_pixmaps)
             badge.edit_requested.connect(self._open_annotation_editor)
             badge.remove_requested.connect(self._remove_attached_image)
-            clear_btn = QPushButton("Remove Attachments ✕")
+            clear_btn = QPushButton("Clear Snapshot ✕")
             clear_btn.setObjectName("TitleButton")
             clear_btn.setStyleSheet("font-size: 10px; color: #ef4444; padding: 2px 6px;")
-            clear_btn.setToolTip("Remove screenshots queued for the next AI message")
+            clear_btn.setToolTip("Clear the current snapshot")
             clear_btn.clicked.connect(self._clear_attached_images)
 
             self.badge_layout.addWidget(badge, 1)
@@ -1265,11 +1257,6 @@ class CompanionWindow(QMainWindow):
         self.pending_guide_type = guide_type
         self.last_guide_request = prompt
         draft_prompt = f"{self._guide_draft_instruction(guide_type)}\n\nUser request:\n{prompt}" if img_b64s else prompt
-
-        # Add User message bubble to UI with all attached thumbnails
-        user_widget = ChatMessageWidget("user", prompt, pixmaps=pixmaps)
-        self.chat_layout.insertWidget(self.chat_layout.count() - 1, user_widget)
-        self.scroll_to_bottom()
 
         # Update conversation session context
         self.conversation.add_user_message(draft_prompt, images_b64=img_b64s)
@@ -1336,7 +1323,7 @@ class CompanionWindow(QMainWindow):
         # are available to the guide export.
         display_pixmaps = annotated_pixmaps or None
         asst_widget = ChatMessageWidget(
-            "assistant", clean_text, pixmaps=display_pixmaps, guide_type=self.pending_guide_type
+            "assistant", clean_text, pixmaps=display_pixmaps, guide_type=self.pending_guide_type, production_mode=True
         )
         asst_widget.export_requested.connect(self._handle_doc_export)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, asst_widget)
@@ -1405,7 +1392,6 @@ class CompanionWindow(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
         self.chat_layout.addStretch()
-        self.add_system_welcome()
 
     def scroll_to_bottom(self):
         QApplication.processEvents()
