@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="hyprland_toplevel_export_v1">
+  <copyright>
+    Copyright © 2022 Vaxry
+    This protocol description is provided under the BSD-style license used by
+    the Hyprland protocols project.
+  </copyright>
+  <description summary="capturing the contents of toplevel windows">
+    Export the contents of a Hyprland toplevel window into a client buffer.
+  </description>
+
+  <interface name="hyprland_toplevel_export_manager_v1" version="1">
+    <request name="capture_toplevel">
+      <arg name="frame" type="new_id" interface="hyprland_toplevel_export_frame_v1"/>
+      <arg name="overlay_cursor" type="int"/>
+      <arg name="handle" type="uint"/>
+    </request>
+    <request name="destroy" type="destructor"/>
+  </interface>
+
+  <interface name="hyprland_toplevel_export_frame_v1" version="2">
+    <event name="buffer">
+      <arg name="format" type="uint"/>
+      <arg name="width" type="uint"/>
+      <arg name="height" type="uint"/>
+      <arg name="stride" type="uint"/>
+    </event>
+    <request name="copy">
+      <arg name="buffer" type="object" interface="wl_buffer"/>
+      <arg name="ignore_damage" type="int"/>
+    </request>
+    <event name="damage">
+      <arg name="x" type="uint"/>
+      <arg name="y" type="uint"/>
+      <arg name="width" type="uint"/>
+      <arg name="height" type="uint"/>
+    </event>
+    <enum name="flags" bitfield="true">
+      <entry name="y_invert" value="1"/>
+    </enum>
+    <event name="flags">
+      <arg name="flags" type="uint" enum="flags"/>
+    </event>
+    <event name="ready">
+      <arg name="tv_sec_hi" type="uint"/>
+      <arg name="tv_sec_lo" type="uint"/>
+      <arg name="tv_nsec" type="uint"/>
+    </event>
+    <event name="failed"/>
+    <request name="destroy" type="destructor"/>
+    <event name="linux_dmabuf">
+      <arg name="format" type="uint"/>
+      <arg name="width" type="uint"/>
+      <arg name="height" type="uint"/>
+    </event>
+    <event name="buffer_done"/>
+  </interface>
+</protocol>

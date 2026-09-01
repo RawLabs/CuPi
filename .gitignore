@@ -1,0 +1,19 @@
+# Python and Qt runtime by-products
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local builds and native test helpers
+build/
+dist/
+capture/awc-hyprland-toplevel-capture
+
+# Local application state; it can include captures, exports, logs, and API keys
+data/
+releases/data/
+*.log
+.env
+.env.*
+
+# Release binaries are generated artifacts, never source
+releases/WorkCompanion-*
