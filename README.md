@@ -123,6 +123,7 @@ Run the test suite from the project directory:
 python3 -m unittest discover -s tests
 ```
 GUI tests require an active desktop session. The capture and guide UI should also be exercised manually on the desktop where the app will run.
+Pytest initializes one shared offscreen Qt application for image and widget tests.
 
 **What the test suite covers:**
 * `test_sentinel_engine.py`: Channel-correct 3D numpy delta math ($\le 1.0$), baseline resets, candidate states.
