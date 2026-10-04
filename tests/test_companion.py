@@ -59,6 +59,14 @@ class TestCompanion(unittest.TestCase):
         self.assertTrue(len(screens) >= 1)
         self.assertEqual(screens[0].target_type, "screen")
 
+    def test_native_area_picker_geometry_is_global(self):
+        from capture.picker_overlay import PickerOverlay
+
+        rect = PickerOverlay._parse_native_geometry("-320,24 640x480\n")
+        self.assertIsNotNone(rect)
+        self.assertEqual((rect.x(), rect.y(), rect.width(), rect.height()), (-320, 24, 640, 480))
+        self.assertIsNone(PickerOverlay._parse_native_geometry("not a geometry"))
+
     def test_window_capture_cropping(self):
         from PyQt6.QtCore import QRect
         from unittest.mock import patch

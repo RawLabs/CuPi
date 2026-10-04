@@ -1,5 +1,8 @@
-from PyQt6.QtWidgets import QWidget, QRubberBand, QApplication
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
+import re
+import shutil
+
+from PyQt6.QtWidgets import QWidget, QRubberBand
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QProcess
 from PyQt6.QtGui import QPainter, QColor, QPen, QCursor, QGuiApplication, QPixmap
 from capture.screen_capture import SourceTarget
 
@@ -13,8 +16,7 @@ class PickerOverlay(QWidget):
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool |
-            Qt.WindowType.BypassWindowManagerHint
+            Qt.WindowType.Window
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setCursor(Qt.CursorShape.CrossCursor)
@@ -22,20 +24,64 @@ class PickerOverlay(QWidget):
         self.origin = QPoint()
         self.rubber_band: QRubberBand = None
         self.is_selecting = False
+        self._picker_process: QProcess | None = None
 
-        # Cover virtual geometry of all screens
-        geo = QRect()
-        for scr in QGuiApplication.screens():
-            geo = geo.united(scr.geometry())
-        self.setGeometry(geo)
+        self._screen_geometry = QRect()
 
     def show_overlay(self):
+        # On wlroots compositors (including Hyprland), slurp uses the native
+        # layer-shell selection surface.  It can receive input across the
+        # desktop without making this application's window fullscreen or
+        # changing focus/workspaces.
+        if shutil.which("slurp"):
+            self._show_native_picker()
+            return
+
         self.origin = QPoint()
         self.is_selecting = False
-        self.setGeometry(self._get_total_screen_rect())
-        self.show()
+        # Wayland compositors do not honor a top-level widget that tries to
+        # span the virtual desktop, and BypassWindowManagerHint can leave its
+        # input surface constrained to a small area.  Fullscreen the overlay
+        # on the screen under the pointer instead.
+        screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+        self._screen_geometry = screen.geometry() if screen else self._get_total_screen_rect()
+        self.setGeometry(self._screen_geometry)
+        self.showFullScreen()
         self.raise_()
         self.activateWindow()
+
+    def _show_native_picker(self) -> None:
+        self._picker_process = QProcess(self)
+        self._picker_process.finished.connect(self._on_native_picker_finished)
+        self._picker_process.start("slurp", ["-f", "%x,%y %wx%h"])
+
+    @staticmethod
+    def _parse_native_geometry(output: str) -> QRect | None:
+        match = re.fullmatch(r"\s*(-?\d+),(-?\d+)\s+(\d+)x(\d+)\s*", output)
+        if not match:
+            return None
+        x, y, width, height = (int(value) for value in match.groups())
+        return QRect(x, y, width, height)
+
+    def _on_native_picker_finished(self, exit_code: int, _exit_status) -> None:
+        process = self._picker_process
+        self._picker_process = None
+        output = bytes(process.readAllStandardOutput()).decode(errors="replace") if process else ""
+        if process:
+            process.deleteLater()
+
+        rect = self._parse_native_geometry(output) if exit_code == 0 else None
+        if rect and rect.width() > 20 and rect.height() > 20:
+            self.target_selected.emit(SourceTarget(
+                target_type="region",
+                target_id="custom_region",
+                name=f"Selected Area ({rect.width()}x{rect.height()})",
+                rect=rect,
+            ))
+        else:
+            # Escape is reported by slurp as a non-zero exit and should only
+            # dismiss the picker, never close the companion application.
+            self.canceled.emit()
 
     def _get_total_screen_rect(self) -> QRect:
         total = QRect()
@@ -88,11 +134,13 @@ class PickerOverlay(QWidget):
                 self.close()
 
                 if rect.width() > 20 and rect.height() > 20:
+                    # QRubberBand geometry is local to this fullscreen widget;
+                    # screen capture backends require global desktop geometry.
                     target = SourceTarget(
                         target_type="region",
                         target_id="custom_region",
                         name=f"Selected Area ({rect.width()}x{rect.height()})",
-                        rect=rect
+                        rect=rect.translated(self._screen_geometry.topLeft())
                     )
                     self.target_selected.emit(target)
                 else:
