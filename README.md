@@ -23,16 +23,18 @@ A cross-platform floating desktop AI companion. Application features depend on t
 Actual app previews rendered with temporary settings and no private captures.
 Click either image to view it at full size.
 
-## Architecture
+## 🎯 How to Use
 
-* `platform_api/`: OS-neutral capture, window, cursor, hotkey, permission, and capability API.
-* `platform_api/linux_x11.py`: all `xprop`, `xwininfo`, `xdotool`, and `x11grab` behavior.
-* `platform_api/linux_wayland.py`: Wayland-safe adapter with grim monitor/region capture and Hyprland clean-window capture.
-* `platform_api/windows.py`: native Win32 window enumeration/focus plus Qt capture.
-* `storage/`: portable (`portable.flag` + `./data`) and installed per-user layouts.
-* `sessions/`: versioned OS-neutral SOP session/step representation.
+1. **Adjust Size & Transparency**: Use header **opacity slider** or drag window edges to position companion.
+2. **Select Source & Production**: Choose a target window or display from the **Source** dropdown and select a production type. The model is available under **Options**.
+3. **Create a Production**:
+   * Click **Preview** to inspect a capture without saving or sending it.
+   * Click **Capture** to create or replace the editable current snapshot without sending it to AI.
+   * Write your request, then click **Produce**.
+   * Click **Save image** to save a capture to disk only.
+4. **Export**: Use **Export** on the AI response to create a PDF/Word/HTML/Markdown evidence bundle and sharing ZIP.
 
-Place an empty `portable.flag` beside the executable (or source entry point) to keep all state under `./data/{config,sessions,captures,exports,logs}`.
+Sentinel is optional background monitoring and is available under **Options** so it does not distract from the normal capture workflow.
 
 ---
 
@@ -138,6 +140,19 @@ same screen coordinates.
 
 ---
 
+## Architecture
+
+* `platform_api/`: OS-neutral capture, window, cursor, hotkey, permission, and capability API.
+* `platform_api/linux_x11.py`: all `xprop`, `xwininfo`, `xdotool`, and `x11grab` behavior.
+* `platform_api/linux_wayland.py`: Wayland-safe adapter with grim monitor/region capture and Hyprland clean-window capture.
+* `platform_api/windows.py`: native Win32 window enumeration/focus plus Qt capture.
+* `storage/`: portable (`portable.flag` + `./data`) and installed per-user layouts.
+* `sessions/`: versioned OS-neutral SOP session/step representation.
+
+Place an empty `portable.flag` beside the executable (or source entry point) to keep all state under `./data/{config,sessions,captures,exports,logs}`.
+
+---
+
 ## 🧪 Running Automated Unit Tests
 
 Install the Python dependencies above (including `python-docx` for Word export), then run the test suite from the project directory:
@@ -159,19 +174,6 @@ Pytest initializes one shared offscreen Qt application for image and widget test
 * `test_companion.py`: UI initialization, layout constraints, model search, history context, export formatting.
 
 ---
-
-## 🎯 How to Use
-
-1. **Adjust Size & Transparency**: Use header **opacity slider** or drag window edges to position companion.
-2. **Select Source & Production**: Choose a target window or display from the **Source** dropdown and select a production type. The model is available under **Options**.
-3. **Create a Production**:
-   * Click **Preview** to inspect a capture without saving or sending it.
-   * Click **Capture** to create or replace the editable current snapshot without sending it to AI.
-   * Write your request, then click **Produce**.
-   * Click **Save image** to save a capture to disk only.
-4. **Export**: Use **Export** on the AI response to create a PDF/Word/HTML/Markdown evidence bundle and sharing ZIP.
-
-Sentinel is optional background monitoring and is available under **Options** so it does not distract from the normal capture workflow.
 
 ## Privacy and portable builds
 
