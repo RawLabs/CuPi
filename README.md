@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/cupi.svg" width="112" height="112" alt="CᵘPⁱ app icon: white C and P, blue superscripts and capture corners">
+</p>
+
 # CᵘPⁱ — Desktop scratchpad
 
 **Capture, powered by understanding. Produce, powered by intelligence.**
@@ -9,6 +13,15 @@ blue superscripts and capture corners, with a scalable icon for small sizes.
 A cross-platform floating desktop AI companion. Application features depend on the `PlatformBackend` API; Linux/X11, Linux/Wayland, and Windows are separate adapters, with a macOS stub reserved for later implementation.
 
 > **Hyprland status:** the bundled native helper captures a selected application cleanly—even on another workspace—without changing the current workspace or moving windows. If that helper is unavailable, the app never substitutes a current-workspace region crop for an inactive-workspace request.
+
+## Desktop preview
+
+| Scratchpad | Connection and model options |
+| :---: | :---: |
+| [![CᵘPⁱ scratchpad with capture controls, preview area and production prompt](docs/media/desktop-scratchpad.png)](docs/media/desktop-scratchpad.png) | [![CᵘPⁱ with Options expanded, showing provider, model filters and Sentinel controls](docs/media/desktop-options.png)](docs/media/desktop-options.png) |
+
+Actual app previews rendered with temporary settings and no private captures.
+Click either image to view it at full size.
 
 ## Architecture
 
