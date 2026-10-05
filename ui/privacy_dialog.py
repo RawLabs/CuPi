@@ -1,13 +1,13 @@
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QFrame
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QFont
 
 
 class OpenRouterPrivacyDialog(QDialog):
-    accepted_key = pyqtSignal(str)
+    accepted_key = Signal(str)
 
     def __init__(self, current_key: str = "", parent=None):
         super().__init__(parent)

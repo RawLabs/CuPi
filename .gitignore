@@ -17,3 +17,8 @@ releases/data/
 
 # Release binaries are generated artifacts, never source
 releases/WorkCompanion-*
+releases/GuideForge-*
+releases/cupi-*
+
+# Local Python environment
+.venv/

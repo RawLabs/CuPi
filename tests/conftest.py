@@ -13,7 +13,7 @@ import os
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ.pop("QT_QPA_PLATFORMTHEME", None)
 
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 
 qt_app = QApplication.instance() or QApplication([])

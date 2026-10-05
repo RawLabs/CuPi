@@ -8,8 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
-from PyQt6.QtCore import QRect
-from PyQt6.QtGui import QGuiApplication, QImage, QPixmap
+from PySide6.QtCore import QRect
+from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 
 from .backend import PlatformCapabilities, PlatformPermission, SourceTarget
 from .qt_common import QtScreenBackend

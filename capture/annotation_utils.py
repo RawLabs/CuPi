@@ -1,6 +1,6 @@
 import math
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QBrush, QPolygonF
-from PyQt6.QtCore import Qt, QRect, QPointF
+from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QBrush, QPolygonF
+from PySide6.QtCore import Qt, QRect, QPointF
 
 def draw_annotation_on_pixmap(pixmap: QPixmap, annotation_type: str, coords: list, is_normalized: bool = False) -> QPixmap:
     """

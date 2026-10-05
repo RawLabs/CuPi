@@ -1,12 +1,12 @@
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
-from PyQt6.QtGui import QGuiApplication
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import Qt, Signal, QTimer
 from ui.styles import DARK_STYLE
 
 class SentinelToastWidget(QWidget):
-    inspect_clicked = pyqtSignal(object)   # Emits CandidateRecord
-    mute_clicked = pyqtSignal()
-    dismiss_clicked = pyqtSignal(str)     # Emits fingerprint
+    inspect_clicked = Signal(object)   # Emits CandidateRecord
+    mute_clicked = Signal()
+    dismiss_clicked = Signal(str)     # Emits fingerprint
 
     def __init__(self, candidate_record, parent=None):
         super().__init__(parent)

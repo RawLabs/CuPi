@@ -7,8 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QRect
-from PyQt6.QtGui import QGuiApplication, QPixmap
+from PySide6.QtCore import QRect
+from PySide6.QtGui import QGuiApplication, QPixmap
 
 from .backend import PlatformCapabilities, PlatformPermission, SourceTarget
 from .qt_common import QtScreenBackend
@@ -16,7 +16,7 @@ from .qt_common import QtScreenBackend
 
 class LinuxX11Backend(QtScreenBackend):
     name = "linux-x11"
-    _ignored_titles = ("Desktop", "AI Work Companion", "mutter guard window", "gnome-shell")
+    _ignored_titles = ("Desktop", "AI Work Companion", "GuideForge", "mutter guard window", "gnome-shell")
 
     @property
     def capabilities(self):

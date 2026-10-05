@@ -1,15 +1,15 @@
 import re
 import shutil
 
-from PyQt6.QtWidgets import QWidget, QRubberBand
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QProcess
-from PyQt6.QtGui import QPainter, QColor, QPen, QCursor, QGuiApplication, QPixmap
+from PySide6.QtWidgets import QWidget, QRubberBand
+from PySide6.QtCore import Qt, QPoint, QRect, Signal, QProcess
+from PySide6.QtGui import QPainter, QColor, QPen, QCursor, QGuiApplication, QPixmap
 from capture.screen_capture import SourceTarget
 
 
 class PickerOverlay(QWidget):
-    target_selected = pyqtSignal(SourceTarget)
-    canceled = pyqtSignal()
+    target_selected = Signal(SourceTarget)
+    canceled = Signal()
 
     def __init__(self):
         super().__init__()
@@ -33,10 +33,13 @@ class PickerOverlay(QWidget):
         # layer-shell selection surface.  It can receive input across the
         # desktop without making this application's window fullscreen or
         # changing focus/workspaces.
-        if shutil.which("slurp"):
+        if QGuiApplication.platformName().startswith("wayland") and shutil.which("slurp"):
             self._show_native_picker()
             return
 
+        self._show_qt_overlay()
+
+    def _show_qt_overlay(self):
         self.origin = QPoint()
         self.is_selecting = False
         # Wayland compositors do not honor a top-level widget that tries to
@@ -51,9 +54,27 @@ class PickerOverlay(QWidget):
         self.activateWindow()
 
     def _show_native_picker(self) -> None:
+        if self._picker_process and self._picker_process.state() != QProcess.ProcessState.NotRunning:
+            return
         self._picker_process = QProcess(self)
         self._picker_process.finished.connect(self._on_native_picker_finished)
+        self._picker_process.errorOccurred.connect(self._on_native_picker_error)
         self._picker_process.start("slurp", ["-f", "%x,%y %wx%h"])
+
+    def _on_native_picker_error(self, error):
+        if error == QProcess.ProcessError.FailedToStart:
+            process = self._picker_process
+            self._picker_process = None
+            if process:
+                process.deleteLater()
+            self._show_qt_overlay()
+
+    def cancel(self):
+        if self._picker_process and self._picker_process.state() != QProcess.ProcessState.NotRunning:
+            self._picker_process.kill()
+        else:
+            self.hide()
+            self.canceled.emit()
 
     @staticmethod
     def _parse_native_geometry(output: str) -> QRect | None:
@@ -66,6 +87,8 @@ class PickerOverlay(QWidget):
     def _on_native_picker_finished(self, exit_code: int, _exit_status) -> None:
         process = self._picker_process
         self._picker_process = None
+        if process is None:
+            return
         output = bytes(process.readAllStandardOutput()).decode(errors="replace") if process else ""
         if process:
             process.deleteLater()
@@ -144,11 +167,13 @@ class PickerOverlay(QWidget):
                     )
                     self.target_selected.emit(target)
                 else:
-                    # Single click - select default screen target
+                    screens = QGuiApplication.screens()
+                    screen = QGuiApplication.screenAt(self._screen_geometry.center()) or QGuiApplication.primaryScreen()
+                    index = screens.index(screen) if screen in screens else 0
                     target = SourceTarget(
-                        target_type="screen",
-                        target_id="screen_0",
-                        name="Full Screen"
+                        target_type="screen", target_id=f"screen_{index}",
+                        name=screen.name() if screen else "Full Screen",
+                        rect=screen.geometry() if screen else None,
                     )
                     self.target_selected.emit(target)
 

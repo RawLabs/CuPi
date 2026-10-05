@@ -1,9 +1,9 @@
 import math
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QButtonGroup, QRadioButton
 )
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QColor, QMouseEvent
-from PyQt6.QtCore import Qt, QPoint, QRect
+from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QMouseEvent
+from PySide6.QtCore import Qt, QPoint, QRect
 from capture.annotation_utils import draw_annotation_on_pixmap
 
 

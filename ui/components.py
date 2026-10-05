@@ -1,14 +1,15 @@
 import time
-from PyQt6.QtWidgets import (
+from ai.safe_markdown import sanitize_markdown
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QSizePolicy, QPlainTextEdit
 )
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
-from PyQt6.QtGui import QPixmap, QImage, QIcon, QFont, QKeyEvent
+from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtGui import QPixmap, QImage, QIcon, QFont, QKeyEvent
 
 class ChatMessageWidget(QWidget):
-    export_requested = pyqtSignal(str, list, str)
+    export_requested = Signal(str, list, str)
 
-    def __init__(self, role: str, text: str, pixmap: QPixmap = None, pixmaps: list = None, guide_type: str = "", production_mode: bool = False, parent=None):
+    def __init__(self, role: str, text: str, pixmap: QPixmap = None, pixmaps: list = None, guide_type: str = "", production_mode: bool = False, parent=None, trusted_links: bool = False):
         super().__init__(parent)
         self.text = text
         self.guide_type = guide_type
@@ -30,7 +31,7 @@ class ChatMessageWidget(QWidget):
         meta_layout = QHBoxLayout()
         role_label = QLabel("YOU" if is_user else ("PRODUCTION" if production_mode else "COMPANION"))
         role_label.setObjectName("MessageMeta")
-        role_label.setStyleSheet("font-weight: bold; color: " + ("#e0f2fe;" if is_user else "#38bdf8;"))
+        role_label.setStyleSheet("font-weight: bold; color: " + ("#e0f2fe;" if is_user else "#7293ff;"))
         
         time_str = time.strftime("%H:%M")
         time_label = QLabel(time_str)
@@ -40,10 +41,10 @@ class ChatMessageWidget(QWidget):
         meta_layout.addStretch()
 
         if production_mode:
-            export_btn = QPushButton("📄 Export Guide")
+            export_btn = QPushButton("Export")
             export_btn.setObjectName("TitleButton")
-            export_btn.setStyleSheet("font-size: 10px; color: #38bdf8; font-weight: bold; padding: 1px 4px;")
-            export_btn.setToolTip("Export this drafted guide with its captured steps (.md & .html)")
+            export_btn.setStyleSheet("font-size: 10px; color: #7293ff; font-weight: bold; padding: 1px 4px;")
+            export_btn.setToolTip("Export PDF, Word, standalone HTML, Markdown, and a ZIP bundle with screenshots")
             export_btn.clicked.connect(lambda: self.export_requested.emit(self.text, self.pixmaps, self.guide_type))
             meta_layout.addWidget(export_btn)
 
@@ -58,9 +59,9 @@ class ChatMessageWidget(QWidget):
             img_layout.setContentsMargins(0, 0, 0, 0)
             img_layout.setSpacing(4)
 
-            count_str = f"📷 {len(all_pixmaps)} Screenshot{'s' if len(all_pixmaps) > 1 else ''} Attached"
+            count_str = f"{len(all_pixmaps)} Screenshot{'s' if len(all_pixmaps) > 1 else ''} Attached"
             badge_label = QLabel(count_str)
-            badge_label.setStyleSheet("color: #38bdf8; font-size: 10px; font-weight: bold;")
+            badge_label.setStyleSheet("color: #7293ff; font-size: 10px; font-weight: bold;")
             img_layout.addWidget(badge_label)
 
             thumbs_row = QWidget()
@@ -73,7 +74,7 @@ class ChatMessageWidget(QWidget):
                     thumb_label = QLabel()
                     scaled_pix = p.scaled(130, 85, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                     thumb_label.setPixmap(scaled_pix)
-                    thumb_label.setStyleSheet("border: 1px solid #0284c7; border-radius: 4px;")
+                    thumb_label.setStyleSheet("border: 1px solid #456be3; border-radius: 4px;")
                     thumbs_layout.addWidget(thumb_label)
             thumbs_layout.addStretch()
             img_layout.addWidget(thumbs_row)
@@ -86,7 +87,7 @@ class ChatMessageWidget(QWidget):
         # Assistant responses are Markdown.  QLabel otherwise treats the source
         # literally, exposing markers such as **bold**, ### headings and `code`.
         text_label.setTextFormat(Qt.TextFormat.MarkdownText)
-        text_label.setText(text)
+        text_label.setText(sanitize_markdown(text, trusted_links=trusted_links))
         text_label.setWordWrap(True)
         text_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse |
@@ -109,8 +110,8 @@ class ChatMessageWidget(QWidget):
 
 
 class AttachedImageBadge(QWidget):
-    edit_requested = pyqtSignal(int)
-    remove_requested = pyqtSignal(int)
+    edit_requested = Signal(int)
+    remove_requested = Signal(int)
 
     def __init__(self, pixmaps: list, parent=None):
         super().__init__(parent)
@@ -120,12 +121,12 @@ class AttachedImageBadge(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                background-color: #1e293b;
-                border: 1px solid #0284c7;
+                background-color: #22252b;
+                border: 1px solid #456be3;
                 border-radius: 6px;
             }
             QPushButton {
-                background-color: #0284c7;
+                background-color: #456be3;
                 color: #ffffff;
                 border: none;
                 border-radius: 4px;
@@ -134,16 +135,16 @@ class AttachedImageBadge(QWidget):
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #0369a1;
+                background-color: #3658c1;
             }
         """)
 
         count = len(pixmaps) if pixmaps else 0
         header = QHBoxLayout()
-        lbl = QLabel("📷 Current snapshot" if count == 1 else f"📷 {count} snapshots")
-        lbl.setStyleSheet("color: #7dd3fc; font-size: 11px; font-weight: bold;")
+        lbl = QLabel("Current snapshot" if count == 1 else f"{count} snapshots")
+        lbl.setStyleSheet("color: #9baeff; font-size: 11px; font-weight: bold;")
         hint = QLabel("Edit or replace before asking AI")
-        hint.setStyleSheet("color: #94a3b8; font-size: 10px;")
+        hint.setStyleSheet("color: #a2a7b2; font-size: 10px;")
         header.addWidget(lbl)
         header.addStretch()
         header.addWidget(hint)
@@ -162,10 +163,10 @@ class AttachedImageBadge(QWidget):
             thumb = QLabel()
             thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
             thumb.setPixmap(pixmap.scaled(78, 52, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-            thumb.setStyleSheet("border-radius: 3px; border: 1px solid #0369a1;")
+            thumb.setStyleSheet("border-radius: 3px; border: 1px solid #3658c1;")
             step_label = QLabel(f"Step {index + 1}")
             step_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            step_label.setStyleSheet("color: #cbd5e1; font-size: 10px; font-weight: bold;")
+            step_label.setStyleSheet("color: #c5c7cd; font-size: 10px; font-weight: bold;")
             actions = QHBoxLayout()
             actions.setSpacing(3)
             edit_btn = QPushButton("Edit")
@@ -185,8 +186,8 @@ class AttachedImageBadge(QWidget):
 
 
 class PromptTextEdit(QPlainTextEdit):
-    return_pressed = pyqtSignal()
-    escape_pressed = pyqtSignal()
+    return_pressed = Signal()
+    escape_pressed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)

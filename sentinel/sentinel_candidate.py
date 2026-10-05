@@ -3,8 +3,8 @@ import hashlib
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple
-from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import QImage
+from PySide6.QtCore import QRect, Qt
+from PySide6.QtGui import QImage
 from capture.sentinel_regions import compute_iou
 
 class CandidateState(Enum):
@@ -45,10 +45,7 @@ def compute_perceptual_hash(qimage: QImage) -> int:
     )
     gray = scaled.convertToFormat(QImage.Format.Format_Grayscale8)
 
-    pixels = []
-    ptr = gray.bits()
-    ptr.setsize(64)
-    pixels = list(ptr.asstring())
+    pixels = list(bytes(gray.constBits()))
 
     avg = sum(pixels) / 64.0 if pixels else 0.0
     hash_val = 0

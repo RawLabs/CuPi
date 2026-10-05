@@ -1,7 +1,7 @@
 import time
 import unittest
-from PyQt6.QtCore import QCoreApplication, QEventLoop, QTimer
-from PyQt6.QtGui import QImage, QColor
+from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+from PySide6.QtGui import QImage, QColor
 from capture.sentinel_engine import SentinelState
 from sentinel.sentinel_worker import SentinelController
 

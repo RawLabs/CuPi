@@ -2,12 +2,12 @@ import sys
 import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
         QComboBox, QLineEdit, QScrollArea, QFrame, QDialog, QMessageBox, QSizeGrip, QSlider
 )
-from PyQt6.QtCore import Qt, QPoint, QRect, QSize, pyqtSlot, QTimer
-from PyQt6.QtGui import QPixmap, QCursor, QIcon, QFont, QPainter
+from PySide6.QtCore import Qt, QPoint, QRect, QSize, Slot, QTimer
+from PySide6.QtGui import QPixmap, QCursor, QIcon, QFont, QPainter
 
 from config import ConfigManager
 from ai.conversation import ConversationSession
@@ -27,12 +27,21 @@ from ui.components import ChatMessageWidget, AttachedImageBadge, PromptTextEdit
 from ui.privacy_dialog import OpenRouterPrivacyDialog
 from ui.sentinel_dialog import SentinelLogDialog
 from ui.sentinel_toast import SentinelToastWidget
+from branding import APP_NAME, PHILOSOPHY, application_icon
 
 
 class CompanionWindow(QMainWindow):
-    def __init__(self, config_manager: ConfigManager, platform_backend: PlatformBackend | None = None):
+    def __init__(self, config_manager: ConfigManager, platform_backend: PlatformBackend | None = None, discover_models: bool = True):
         super().__init__()
         self.config = config_manager
+        if (self.config.get("active_provider") == "openrouter"
+                and not self.config.get("openrouter_privacy_accepted", False)):
+            self.config.set("active_provider", "lmstudio")
+        self._closing = False
+        self._model_refresh_pending = False
+        self._request_in_flight = False
+        self._pending_user_message = None
+        self.last_sent_images_b64 = []
         self.platform = platform_backend or get_platform_backend()
         self.conversation = ConversationSession(
             max_turns=self.config.get("max_history_turns", 10)
@@ -73,9 +82,12 @@ class CompanionWindow(QMainWindow):
         self._init_ui()
         self._load_saved_geometry()
         self._refresh_sources()
-        self.fetch_models()
+        if discover_models:
+            self.fetch_models()
 
     def _init_ui(self):
+        self.setWindowTitle(APP_NAME + " · Desktop scratchpad")
+        self.setWindowIcon(application_icon())
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint |
@@ -104,11 +116,14 @@ class CompanionWindow(QMainWindow):
         title_layout.setContentsMargins(10, 6, 8, 6)
         title_layout.setSpacing(6)
 
-        title_label = QLabel("✨ AI Work Companion · Guide Builder")
+        title_label = QLabel('C<span style="color:#537cff;"><sup>u</sup></span>P<span style="color:#537cff;"><sup>i</sup></span>')
+        title_label.setTextFormat(Qt.TextFormat.RichText)
         title_label.setObjectName("AppTitle")
+        title_label.setToolTip(PHILOSOPHY)
+        title_label.setAccessibleName(APP_NAME)
 
         # Opacity Slider & Label
-        opacity_icon = QLabel("👁️")
+        opacity_icon = QLabel("Opacity")
         opacity_icon.setToolTip("Adjust Window Transparency")
 
         self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
@@ -121,17 +136,18 @@ class CompanionWindow(QMainWindow):
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
 
         self.opacity_label = QLabel(f"{initial_opacity}%")
-        self.opacity_label.setStyleSheet("font-size: 10px; color: #94a3b8; min-width: 28px;")
+        self.opacity_label.setStyleSheet("font-size: 10px; color: #a2a7b2; min-width: 28px;")
 
-        self.collapse_btn = QPushButton("🔽 Collapse")
+        self.collapse_btn = QPushButton("Fold")
         self.collapse_btn.setObjectName("TitleButton")
         self.collapse_btn.setToolTip("Collapse / Expand")
         self.collapse_btn.clicked.connect(self.toggle_collapse)
 
-        self.close_btn = QPushButton("✖ Close")
+        self.close_btn = QPushButton("×")
+        self.close_btn.setAccessibleName("Close " + APP_NAME)
         self.close_btn.setObjectName("TitleButton")
         self.close_btn.setObjectName("CloseButton")
-        self.close_btn.setToolTip("Close Companion")
+        self.close_btn.setToolTip("Close " + APP_NAME)
         self.close_btn.clicked.connect(self.close)
 
         title_layout.addWidget(title_label)
@@ -164,7 +180,7 @@ class CompanionWindow(QMainWindow):
         source_row.setSpacing(6)
 
         source_label = QLabel("Source:")
-        source_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        source_label.setStyleSheet("font-size: 11px; color: #a2a7b2;")
 
         self.source_combo = QComboBox()
         self.source_combo.setMinimumWidth(150)
@@ -187,27 +203,27 @@ class CompanionWindow(QMainWindow):
         self.refresh_sources_btn.setToolTip("Refresh list of open windows and monitors")
         self.refresh_sources_btn.clicked.connect(self._refresh_sources)
 
-        self.full_screen_btn = QPushButton("🖥️ Full Screen")
+        self.full_screen_btn = QPushButton("Screen")
         self.full_screen_btn.setObjectName("SecondaryButton")
         self.full_screen_btn.setToolTip("Use the primary monitor as the capture target")
         self.full_screen_btn.clicked.connect(self._select_full_screen)
 
-        self.picker_btn = QPushButton("📐 Select Area")
+        self.picker_btn = QPushButton("Region")
         self.picker_btn.setObjectName("SecondaryButton")
         self.picker_btn.setToolTip("Click & drag across screen to capture a specific area")
         self.picker_btn.clicked.connect(self._start_picker_overlay)
 
-        self.watchdog_btn = QPushButton("🛡️ Watchdog")
+        self.watchdog_btn = QPushButton("Watch")
         self.watchdog_btn.setObjectName("SecondaryButton")
         self.watchdog_btn.setCheckable(True)
         self.watchdog_btn.setToolTip("Toggle Sentinel background screen monitor (Passive Watchdog)")
         self.watchdog_btn.clicked.connect(self.toggle_watchdog)
 
-        self.sentinel_badge = QLabel("🛡️ Off")
-        self.sentinel_badge.setStyleSheet("font-size: 10px; color: #64748b; font-weight: bold;")
-        self.sentinel_badge.setToolTip("Click '📊 Log' to view detailed Sentinel evaluation history")
+        self.sentinel_badge = QLabel("Watch off")
+        self.sentinel_badge.setStyleSheet("font-size: 10px; color: #8b929f; font-weight: bold;")
+        self.sentinel_badge.setToolTip("Click 'Activity' to view detailed Sentinel evaluation history")
 
-        self.sentinel_log_btn = QPushButton("📊 Log")
+        self.sentinel_log_btn = QPushButton("Activity")
         self.sentinel_log_btn.setObjectName("SecondaryButton")
         self.sentinel_log_btn.setToolTip("View Sentinel Evaluation Log & Performance Metrics")
         self.sentinel_log_btn.clicked.connect(self.show_sentinel_log)
@@ -217,7 +233,7 @@ class CompanionWindow(QMainWindow):
         source_row.addWidget(self.refresh_sources_btn)
 
         self.selected_sources_lbl = QLabel("Capture source: current selection")
-        self.selected_sources_lbl.setStyleSheet("font-size: 10px; color: #38bdf8;")
+        self.selected_sources_lbl.setStyleSheet("font-size: 10px; color: #7293ff;")
         self.selected_sources_lbl.setWordWrap(True)
 
         self.capture_status_lbl = QLabel()
@@ -226,13 +242,13 @@ class CompanionWindow(QMainWindow):
 
         preview_row = QHBoxLayout()
         preview_row.setSpacing(6)
-        self.preview_btn = QPushButton("👁️ Preview")
+        self.preview_btn = QPushButton("Preview")
         self.preview_btn.setObjectName("SecondaryButton")
         self.preview_btn.setToolTip("Preview exactly what will be captured")
         self.preview_btn.clicked.connect(self.preview_capture)
-        self.add_capture_btn = QPushButton("＋ Add Capture")
+        self.add_capture_btn = QPushButton("Capture")
         self.add_capture_btn.setObjectName("ActionButton")
-        self.add_capture_btn.setToolTip("Capture the selected source and add it to your guide steps without sending it to AI")
+        self.add_capture_btn.setToolTip("Capture the selected source and replace the current snapshot without sending it to AI")
         self.add_capture_btn.clicked.connect(self.capture_to_guide)
         preview_row.addWidget(self.preview_btn)
         preview_row.addWidget(self.add_capture_btn)
@@ -242,7 +258,7 @@ class CompanionWindow(QMainWindow):
         capture_mode_row = QHBoxLayout()
         capture_mode_row.setSpacing(6)
         capture_mode_label = QLabel("Capture:")
-        capture_mode_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        capture_mode_label.setStyleSheet("font-size: 11px; color: #a2a7b2;")
         capture_mode_row.addWidget(capture_mode_label)
         capture_mode_row.addWidget(self.full_screen_btn)
         capture_mode_row.addWidget(self.picker_btn)
@@ -250,7 +266,7 @@ class CompanionWindow(QMainWindow):
 
         production_row = QHBoxLayout()
         production_label = QLabel("Produce:")
-        production_label.setStyleSheet("font-size: 11px; color: #7dd3fc; font-weight: bold;")
+        production_label.setStyleSheet("font-size: 11px; color: #9baeff; font-weight: bold;")
         self.guide_type_combo = QComboBox()
         self.guide_type_combo.addItems([
             "Work Instruction", "SOP", "Teaching Guide", "Study Guide", "Quick Reference",
@@ -266,7 +282,7 @@ class CompanionWindow(QMainWindow):
         model_row.setSpacing(6)
 
         model_label = QLabel("Model:")
-        model_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        model_label.setStyleSheet("font-size: 11px; color: #a2a7b2;")
 
         self.model_combo = QComboBox()
         self.model_combo.setMinimumWidth(150)
@@ -280,7 +296,7 @@ class CompanionWindow(QMainWindow):
         self.model_search_input.setToolTip("Filter the model selector by name, provider, or capability")
         self.model_search_input.textChanged.connect(self._filter_models)
 
-        self.adv_toggle_btn = QPushButton("⚙️ Options ▾")
+        self.adv_toggle_btn = QPushButton("Options ▾")
         self.adv_toggle_btn.setObjectName("AdvToggleBtn")
         self.adv_toggle_btn.setToolTip("Show or hide advanced provider & filter options")
         self.adv_toggle_btn.clicked.connect(self._toggle_advanced_panel)
@@ -288,7 +304,7 @@ class CompanionWindow(QMainWindow):
         model_row.addWidget(model_label)
         model_row.addWidget(self.model_search_input, 1)
         model_row.addWidget(self.model_combo, 1)
-        model_row.addWidget(self.adv_toggle_btn)
+        production_row.addWidget(self.adv_toggle_btn)
 
         # Sentinel is an advanced, optional background monitor—not part of the
         # normal capture-and-guide workflow.
@@ -296,7 +312,7 @@ class CompanionWindow(QMainWindow):
         watchdog_row.setSpacing(6)
 
         watchdog_label = QLabel("Sentinel:")
-        watchdog_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        watchdog_label.setStyleSheet("font-size: 11px; color: #a2a7b2;")
 
         watchdog_row.addWidget(watchdog_label)
         watchdog_row.addWidget(self.watchdog_btn)
@@ -323,7 +339,7 @@ class CompanionWindow(QMainWindow):
         provider_row.setSpacing(6)
 
         provider_label = QLabel("Provider:")
-        provider_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        provider_label.setStyleSheet("font-size: 11px; color: #a2a7b2;")
 
         self.provider_combo = QComboBox()
         self.provider_combo.addItems(["LM Studio (Local)", "OpenRouter (Hosted)"])
@@ -345,9 +361,9 @@ class CompanionWindow(QMainWindow):
         filter_row.setSpacing(4)
 
         filter_label = QLabel("Model filters:")
-        filter_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
+        filter_label.setStyleSheet("font-size: 11px; color: #a2a7b2;")
 
-        self.vision_filter_btn = QPushButton("👁️ Vision")
+        self.vision_filter_btn = QPushButton("Vision")
         self.vision_filter_btn.setObjectName("SecondaryButton")
         self.vision_filter_btn.setCheckable(True)
         self.vision_filter_btn.setChecked(True)
@@ -355,7 +371,7 @@ class CompanionWindow(QMainWindow):
         self.vision_filter_btn.setToolTip("Filter only models that support vision / image input")
         self.vision_filter_btn.toggled.connect(self._on_vision_filter_toggled)
 
-        self.free_filter_btn = QPushButton("⚡ Free")
+        self.free_filter_btn = QPushButton("Free")
         self.free_filter_btn.setObjectName("SecondaryButton")
         self.free_filter_btn.setCheckable(True)
         self.free_filter_btn.setToolTip("Filter only free models (:free)")
@@ -387,11 +403,17 @@ class CompanionWindow(QMainWindow):
         self.preview_layout = QHBoxLayout(self.preview_panel)
         self.preview_layout.setContentsMargins(4, 4, 4, 4)
         self.preview_layout.setSpacing(6)
-        self.preview_hint = QLabel("Preview will appear here")
+        self.preview_hint = QLabel("CAPTURE\nChoose a window or region. Keep what matters.")
+        self.preview_hint.setWordWrap(True)
         self.preview_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.preview_hint.setStyleSheet("color: #8b929f; font-size: 11px;")
         self.preview_layout.addWidget(self.preview_hint)
         content_layout.addWidget(self.preview_panel)
+
+        workspace_heading = QLabel("UNDERSTAND  /  PRODUCE")
+        workspace_heading.setObjectName("WorkspaceHeading")
+        workspace_heading.setToolTip(PHILOSOPHY)
+        content_layout.addWidget(workspace_heading)
 
         # 4. Chat Stream Area
         self.scroll_area = QScrollArea()
@@ -426,11 +448,11 @@ class CompanionWindow(QMainWindow):
         prompt_row = QHBoxLayout()
         self.prompt_input = PromptTextEdit()
         self.prompt_input.setObjectName("PromptInput")
-        self.prompt_input.setPlaceholderText("What should this production explain?")
+        self.prompt_input.setPlaceholderText("What do you want to understand or make?")
         self.prompt_input.return_pressed.connect(self.send_query)
         self.prompt_input.escape_pressed.connect(self._handle_escape_key)
 
-        self.send_btn = QPushButton("✦ Ask AI")
+        self.send_btn = QPushButton("Produce")
         self.send_btn.setObjectName("ActionButton")
         self.send_btn.setToolTip("Send prompt to companion (Enter to send, Shift+Enter for newline)")
         self.send_btn.clicked.connect(self.send_query)
@@ -443,12 +465,12 @@ class CompanionWindow(QMainWindow):
         actions_row = QHBoxLayout()
         actions_row.setSpacing(6)
 
-        self.save_screen_btn = QPushButton("💾 Save PNG")
+        self.save_screen_btn = QPushButton("Save image")
         self.save_screen_btn.setObjectName("SecondaryButton")
         self.save_screen_btn.setToolTip("Capture the selected target and save a PNG file only")
         self.save_screen_btn.clicked.connect(self.capture_and_save_screen)
 
-        self.clear_chat_btn = QPushButton("🗑️ Clear Chat")
+        self.clear_chat_btn = QPushButton("Clear scratchpad")
         self.clear_chat_btn.setObjectName("SecondaryButton")
         self.clear_chat_btn.setToolTip("Clear the conversation and any unsent screenshot attachments")
         self.clear_chat_btn.clicked.connect(self.clear_chat)
@@ -467,7 +489,7 @@ class CompanionWindow(QMainWindow):
     def _toggle_advanced_panel(self):
         is_visible = not self.adv_panel.isVisible()
         self.adv_panel.setVisible(is_visible)
-        self.adv_toggle_btn.setText("⚙️ Options ▴" if is_visible else "⚙️ Options ▾")
+        self.adv_toggle_btn.setText("Options ▴" if is_visible else "Options ▾")
 
     def _on_chip_clicked(self, prompt: str):
         self.prompt_input.setText(prompt)
@@ -494,8 +516,8 @@ class CompanionWindow(QMainWindow):
         )
 
     def _handle_escape_key(self):
-        if hasattr(self, 'picker_overlay') and self.picker_overlay and self.picker_overlay.isVisible():
-            self._cancel_picker()
+        if getattr(self, "overlay", None) and self.overlay.isVisible():
+            self.overlay.cancel()
         elif hasattr(self, 'prompt_input') and self.prompt_input.text():
             self.prompt_input.clear()
 
@@ -508,8 +530,8 @@ class CompanionWindow(QMainWindow):
 
     def add_system_welcome(self):
         msg = (
-            "Choose a source, then use **Preview** to check it or **Add Capture** to collect guide steps. "
-            "Nothing is sent to AI until you write a request and choose **Ask AI**."
+            "Choose a source, then use **Preview** to check it or **Capture** to create or replace the current snapshot. "
+            "Nothing is sent to AI until you write a request and choose **Produce**."
         )
         widget = ChatMessageWidget("assistant", msg)
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, widget)
@@ -620,7 +642,7 @@ class CompanionWindow(QMainWindow):
         if self.is_collapsed:
             self.content_area.hide()
             self.setFixedHeight(40)
-            self.collapse_btn.setText("□")
+            self.collapse_btn.setText("Unfold")
         else:
             self.setMinimumSize(460, 720)
             self.setMaximumSize(16777215, 16777215)
@@ -629,7 +651,7 @@ class CompanionWindow(QMainWindow):
             target_w = max(460, geo.get("width", 460))
             target_h = max(720, geo.get("height", 720))
             self.resize(target_w, target_h)
-            self.collapse_btn.setText("─")
+            self.collapse_btn.setText("Fold")
 
     # Sources & Target Selection
     def _refresh_sources(self):
@@ -720,9 +742,10 @@ class CompanionWindow(QMainWindow):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
-        self.preview_hint = QLabel("Preview will appear here")
+        self.preview_hint = QLabel("CAPTURE\nChoose a window or region. Keep what matters.")
+        self.preview_hint.setWordWrap(True)
         self.preview_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_hint.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.preview_hint.setStyleSheet("color: #8b929f; font-size: 11px;")
         self.preview_layout.addWidget(self.preview_hint)
 
     def _show_preview(self, pixmaps: list[QPixmap], targets: list[SourceTarget]) -> None:
@@ -745,7 +768,7 @@ class CompanionWindow(QMainWindow):
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             ))
-            card.setStyleSheet("border: 1px solid #0284c7; border-radius: 4px;")
+            card.setStyleSheet("border: 1px solid #456be3; border-radius: 4px;")
             self.preview_layout.addWidget(card)
 
         self.preview_layout.addStretch()
@@ -892,11 +915,22 @@ class CompanionWindow(QMainWindow):
                 return
 
     def _start_picker_overlay(self):
+        if getattr(self, "overlay", None):
+            self.overlay.cancel()
+            self.overlay.deleteLater()
         self.overlay = PickerOverlay()
         self.overlay.target_selected.connect(self._on_picker_target_selected)
+        self.hide()
+        self.overlay.canceled.connect(self._restore_after_picker)
         self.overlay.show_overlay()
 
+    def _restore_after_picker(self):
+        if not self._closing:
+            self.show()
+            self.raise_()
+
     def _on_picker_target_selected(self, target: SourceTarget):
+        self._restore_after_picker()
         self.selected_targets.clear()
         self.active_target = target
         # Add temporary entry to combo
@@ -944,16 +978,39 @@ class CompanionWindow(QMainWindow):
         base_url = self.config.get("openrouter_url") if provider == "openrouter" else self.config.get("lmstudio_url")
         api_key = self.config.get("openrouter_key") if provider == "openrouter" else ""
 
+        if self._closing:
+            return
         if self.model_fetch_worker and self.model_fetch_worker.isRunning():
-            self.model_fetch_worker.quit()
-            self.model_fetch_worker.wait(1000)
+            self._model_refresh_pending = True
+            self.model_combo.clear()
+            self.model_combo.addItem("Loading models...")
+            return
 
         self.model_combo.clear()
         self.model_combo.addItem("Loading models...")
         
         self.model_fetch_worker = ModelFetchWorker(provider, base_url, api_key)
-        self.model_fetch_worker.models_fetched.connect(self._on_models_fetched)
-        self.model_fetch_worker.start()
+        worker = self.model_fetch_worker
+        worker.setParent(QApplication.instance())
+        worker.models_fetched.connect(
+            lambda models, error, request_provider=provider: self._on_models_fetched_for_provider(request_provider, models, error)
+        )
+        worker.finished.connect(self._on_model_fetch_finished)
+        worker.start()
+
+    def _on_models_fetched_for_provider(self, provider, models, error):
+        if not self._closing and provider == self.config.get("active_provider", "lmstudio"):
+            self._on_models_fetched(models, error)
+
+    def _on_model_fetch_finished(self):
+        worker = self.sender()
+        if worker is self.model_fetch_worker:
+            self.model_fetch_worker = None
+        if worker:
+            worker.deleteLater()
+        if self._model_refresh_pending and not self._closing:
+            self._model_refresh_pending = False
+            self.fetch_models()
 
     def _on_models_fetched(self, models: list, error: str):
         if error:
@@ -1241,10 +1298,23 @@ class CompanionWindow(QMainWindow):
         self.send_query_with_prompt(prompt)
 
     def send_query_with_prompt(self, prompt: str):
+        if self._closing or self._request_in_flight or (self.inference_worker and self.inference_worker.isRunning()):
+            return
+        prompt = prompt.strip()
+        if not prompt:
+            return
         # Save active selected model
         provider = self.config.get("active_provider", "lmstudio")
         selected_model = self.model_combo.currentText()
-        if selected_model and "Loading" not in selected_model:
+        if selected_model.startswith(("Loading", "No models match")):
+            QMessageBox.information(self, "Select a model", "Wait for the models to load or adjust the model filters before asking AI.")
+            return
+        if selected_model == "Default / Fallback":
+            selected_model = self.config.get(f"{provider}_model", "") or ("default" if provider == "lmstudio" else "")
+        if provider == "openrouter" and (not self.config.get("openrouter_privacy_accepted") or not self.config.get("openrouter_key") or not selected_model):
+            QMessageBox.information(self, "Connect OpenRouter", "Open Options and confirm your OpenRouter connection and model before asking AI.")
+            return
+        if selected_model:
             self.config.set(f"{provider}_model", selected_model)
 
         # Attach all accumulated images for this query. A guide type shapes the
@@ -1252,14 +1322,16 @@ class CompanionWindow(QMainWindow):
         img_b64s = list(self.attached_images_b64)
         pixmaps = list(self.attached_pixmaps)
         self.last_sent_pixmaps = list(self.attached_pixmaps)
+        self.last_sent_images_b64 = list(img_b64s)
         guide_type = self.guide_type_combo.currentText()
         self.current_guide_type = guide_type
         self.pending_guide_type = guide_type
         self.last_guide_request = prompt
-        draft_prompt = f"{self._guide_draft_instruction(guide_type)}\n\nUser request:\n{prompt}" if img_b64s else prompt
+        draft_prompt = f"{self._guide_draft_instruction(guide_type)}\n\nUser request:\n{prompt}"
 
         # Update conversation session context
         self.conversation.add_user_message(draft_prompt, images_b64=img_b64s)
+        self._pending_user_message = self.conversation.messages[-1]
 
         # Clear input field & draft attachment state
         self.prompt_input.clear()
@@ -1268,15 +1340,14 @@ class CompanionWindow(QMainWindow):
         self._hide_attached_badge()
 
         # Add typing indicator widget for assistant response
-        self.typing_widget = ChatMessageWidget("assistant", "Companion is analyzing your screen...")
+        self.typing_widget = ChatMessageWidget("assistant", "Reading the context…")
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, self.typing_widget)
         self.scroll_to_bottom()
 
         # Disable inputs while inference runs and show loading indicator
-        self.send_btn.setEnabled(False)
-        self.add_capture_btn.setEnabled(False)
-        self.send_btn.setText("⏳ Thinking...")
-        self.add_capture_btn.setText("⏳ Working...")
+        self._set_request_busy(True)
+        self.send_btn.setText("Thinking…")
+        self.add_capture_btn.setText("Working…")
 
         # Launch async inference worker
         base_url = self.config.get("openrouter_url") if provider == "openrouter" else self.config.get("lmstudio_url")
@@ -1286,11 +1357,28 @@ class CompanionWindow(QMainWindow):
         messages = self.conversation.get_openai_messages()
 
         self.inference_worker = InferenceWorker(provider, base_url, api_key, model, messages)
+        self.inference_worker.setParent(QApplication.instance())
+        self.inference_worker.finished.connect(self._on_inference_finished)
         self.inference_worker.response_ready.connect(self._on_ai_response)
         self.inference_worker.error_occurred.connect(self._on_ai_error)
         self.inference_worker.start()
 
+    def _on_inference_finished(self):
+        worker = self.sender()
+        if worker is self.inference_worker:
+            self.inference_worker = None
+        if worker:
+            worker.deleteLater()
+
+    def _set_request_busy(self, busy: bool):
+        self._request_in_flight = busy
+        for widget in (self.send_btn, self.add_capture_btn, self.clear_chat_btn,
+                       self.provider_combo, self.guide_type_combo, self.model_combo, self.refresh_models_btn):
+            widget.setEnabled(not busy)
+
     def _on_ai_response(self, text: str):
+        if self._closing:
+            return
         from ai.conversation import parse_annotations
         from capture.annotation_utils import draw_annotation_on_pixmap
 
@@ -1325,18 +1413,21 @@ class CompanionWindow(QMainWindow):
         asst_widget = ChatMessageWidget(
             "assistant", clean_text, pixmaps=display_pixmaps, guide_type=self.pending_guide_type, production_mode=True
         )
-        asst_widget.export_requested.connect(self._handle_doc_export)
+        asst_widget.export_requested.connect(
+            lambda response, images, guide, request=self.last_guide_request:
+                self._handle_doc_export(response, images, guide, request_title=request)
+        )
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, asst_widget)
         self.scroll_to_bottom()
 
         self.conversation.add_assistant_message(clean_text)
+        self._pending_user_message = None
 
-        self.send_btn.setText("✦ Ask AI")
-        self.add_capture_btn.setText("＋ Add Capture")
-        self.send_btn.setEnabled(True)
-        self.add_capture_btn.setEnabled(True)
+        self.send_btn.setText("Produce")
+        self.add_capture_btn.setText("Capture")
+        self._set_request_busy(False)
 
-    def _handle_doc_export(self, response_text: str, attached_pixmaps: list, guide_type: str = ""):
+    def _handle_doc_export(self, response_text: str, attached_pixmaps: list, guide_type: str = "", request_title: str = ""):
         try:
             # Strip raw <point> tags if present
             clean_response = re.sub(r'<point>.*?</point>', '', response_text).strip()
@@ -1348,7 +1439,7 @@ class CompanionWindow(QMainWindow):
 
             # If response starts with a numbered step (e.g. "1. "), use user prompt text for title slug
             if re.match(r'^\d+[\.\)]', candidate_title) or len(candidate_title) < 5:
-                candidate_title = self.last_guide_request or candidate_title
+                candidate_title = request_title or self.last_guide_request or candidate_title
 
             res = DocumentExporter.export_finalized_doc(
                 clean_response,
@@ -1357,16 +1448,33 @@ class CompanionWindow(QMainWindow):
                 custom_export_dir=self.config.get("sop_export_dir") or str(self.config.storage.layout.exports)
             )
 
-            html_url = f"file://{res['html_path']}"
-            msg = f"📄 **Finalized Document Generated**:\n- HTML: [{Path(res['html_path']).name}]({html_url})\n- Markdown: `{res['md_path']}`"
-            
-            info_widget = ChatMessageWidget("assistant", msg)
+            links = []
+            for label, key in (("PDF", "pdf_path"), ("Word", "docx_path"),
+                               ("HTML", "html_path"), ("Markdown", "md_path"),
+                               ("ZIP bundle", "zip_path"), ("Open folder", "doc_dir")):
+                url = Path(res[key]).resolve().as_uri()
+                links.append(f"- [{label}](<{url}>)")
+            msg = "📄 **Guide exported**\n\n" + "\n".join(links)
+
+            info_widget = ChatMessageWidget("assistant", msg, trusted_links=True)
             self.chat_layout.insertWidget(self.chat_layout.count() - 1, info_widget)
             self.scroll_to_bottom()
         except Exception as e:
-            print(f"Export error: {e}")
+            QMessageBox.warning(self, "Export failed", f"The guide could not be exported.\n\n{e}")
 
     def _on_ai_error(self, err_msg: str):
+        if self._closing:
+            return
+        if self._pending_user_message is not None:
+            self.conversation.messages = [message for message in self.conversation.messages
+                                          if message is not self._pending_user_message]
+            self._pending_user_message = None
+        if not self.attached_pixmaps and self.last_sent_pixmaps:
+            self.attached_pixmaps = list(self.last_sent_pixmaps)
+            self.attached_images_b64 = list(self.last_sent_images_b64)
+            self._show_attached_badge()
+        if not self.prompt_input.text().strip():
+            self.prompt_input.setText(self.last_guide_request)
         if hasattr(self, 'typing_widget') and self.typing_widget:
             self.chat_layout.removeWidget(self.typing_widget)
             self.typing_widget.deleteLater()
@@ -1375,12 +1483,13 @@ class CompanionWindow(QMainWindow):
         self.chat_layout.insertWidget(self.chat_layout.count() - 1, err_widget)
         self.scroll_to_bottom()
 
-        self.send_btn.setText("✦ Ask AI")
-        self.add_capture_btn.setText("＋ Add Capture")
-        self.send_btn.setEnabled(True)
-        self.add_capture_btn.setEnabled(True)
+        self.send_btn.setText("Produce")
+        self.add_capture_btn.setText("Capture")
+        self._set_request_busy(False)
 
     def clear_chat(self):
+        if self._request_in_flight:
+            return
         self.conversation.clear()
         self.capture_sequence = 0
         self.attached_pixmaps.clear()
@@ -1412,14 +1521,14 @@ class CompanionWindow(QMainWindow):
             self.watchdog_btn.setText("🛡️ Active")
             self.watchdog_btn.setStyleSheet("background-color: #1e3a8a; color: #60a5fa; border: 1px solid #3b82f6;")
             self.sentinel_badge.setText("🛡️ Active")
-            self.sentinel_badge.setStyleSheet("font-size: 10px; color: #38bdf8; font-weight: bold;")
+            self.sentinel_badge.setStyleSheet("font-size: 10px; color: #7293ff; font-weight: bold;")
         else:
             self.sentinel_timer.stop()
             self._sentinel_busy = False
-            self.watchdog_btn.setText("🛡️ Watchdog")
+            self.watchdog_btn.setText("Watch")
             self.watchdog_btn.setStyleSheet("")
-            self.sentinel_badge.setText("🛡️ Off")
-            self.sentinel_badge.setStyleSheet("font-size: 10px; color: #64748b; font-weight: bold;")
+            self.sentinel_badge.setText("Watch off")
+            self.sentinel_badge.setStyleSheet("font-size: 10px; color: #8b929f; font-weight: bold;")
 
     def _on_sentinel_toast_triggered(self, candidate_record):
         if hasattr(self, 'active_toast') and self.active_toast:
@@ -1513,7 +1622,7 @@ class CompanionWindow(QMainWindow):
             badge_color = "#a855f7"  # Purple motion
         else:
             badge_text = f"🛡️ Stable"
-            badge_color = "#38bdf8"  # Sky blue
+            badge_color = "#7293ff"  # Sky blue
 
         self.sentinel_badge.setText(badge_text)
         self.sentinel_badge.setStyleSheet(f"font-size: 10px; color: {badge_color}; font-weight: bold;")
@@ -1527,14 +1636,20 @@ class CompanionWindow(QMainWindow):
         self._sentinel_busy = False
 
     def closeEvent(self, event):
-        if hasattr(self, 'sentinel_timer') and self.sentinel_timer:
-            self.sentinel_timer.stop()
-        if hasattr(self, 'sentinel_controller') and self.sentinel_controller:
+        self._closing = True
+        self.sentinel_timer.stop()
+        if self.sentinel_controller:
             self.sentinel_controller.stop()
-        if self.model_fetch_worker and self.model_fetch_worker.isRunning():
-            self.model_fetch_worker.quit()
-            self.model_fetch_worker.wait(1000)
-        if self.inference_worker and self.inference_worker.isRunning():
-            self.inference_worker.quit()
-            self.inference_worker.wait(1000)
+        if getattr(self, "overlay", None):
+            self.overlay.cancel()
+        running = [worker for worker in (self.model_fetch_worker, self.inference_worker)
+                   if worker and worker.isRunning()]
+        if running:
+            # quit() cannot interrupt a requests call in QThread.run(). Keep the
+            # window and worker objects alive until bounded requests return.
+            self.setEnabled(False)
+            self.send_btn.setText("Closing… waiting for request")
+            event.ignore()
+            QTimer.singleShot(100, self.close)
+            return
         super().closeEvent(event)

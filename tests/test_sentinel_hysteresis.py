@@ -1,5 +1,5 @@
 import unittest
-from PyQt6.QtGui import QImage, QColor
+from PySide6.QtGui import QImage, QColor
 from capture.sentinel_engine import SentinelEngine, SentinelState
 
 class TestSentinelHysteresis(unittest.TestCase):

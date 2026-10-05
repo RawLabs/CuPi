@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Optional
 
-from PyQt6.QtCore import QPoint, QRect
-from PyQt6.QtGui import QPixmap
+from PySide6.QtCore import QPoint, QRect
+from PySide6.QtGui import QPixmap
 
 
 @dataclass(frozen=True)

@@ -1,10 +1,18 @@
 import time
 import unittest
 import numpy as np
-from PyQt6.QtGui import QImage, QColor
+from PySide6.QtGui import QImage, QColor
 from capture.sentinel_engine import SentinelEngine, SentinelState
 
 class TestSentinelEngine(unittest.TestCase):
+    def test_padded_scanlines_are_copied_without_padding(self):
+        image = QImage(7, 3, QImage.Format.Format_RGB888)
+        image.fill(QColor(20, 40, 60))
+        pixels = SentinelEngine().qimage_to_numpy(image)
+        image.fill(QColor(0, 0, 0))
+        self.assertEqual(pixels.shape, (3, 7, 3))
+        np.testing.assert_array_equal(pixels, np.full((3, 7, 3), [20, 40, 60], dtype=np.uint8))
+
     def create_solid_image(self, width: int = 100, height: int = 100, color: QColor = QColor(250, 250, 250)) -> QImage:
         img = QImage(width, height, QImage.Format.Format_RGB888)
         img.fill(color)

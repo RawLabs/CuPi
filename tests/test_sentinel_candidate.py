@@ -1,7 +1,7 @@
 import unittest
 import time
-from PyQt6.QtCore import QRect
-from PyQt6.QtGui import QImage, QColor
+from PySide6.QtCore import QRect
+from PySide6.QtGui import QImage, QColor
 from sentinel.sentinel_candidate import (
     LatchedCandidateManager, CandidateState, compute_stable_fingerprint,
     compute_perceptual_hash, hamming_distance

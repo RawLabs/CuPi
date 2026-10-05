@@ -3,8 +3,8 @@ import numpy as np
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Optional, Tuple, List
-from PyQt6.QtCore import Qt, QRect
-from PyQt6.QtGui import QImage
+from PySide6.QtCore import Qt, QRect
+from PySide6.QtGui import QImage
 
 from capture.sentinel_regions import extract_candidate_regions, scale_and_clamp_bbox
 from capture.sentinel_signals import SentinelSignalEvaluator, VisualSignalResult
@@ -84,9 +84,9 @@ class SentinelEngine:
 
         img = qimage.convertToFormat(QImage.Format.Format_RGB888)
         width, height = img.width(), img.height()
-        ptr = img.bits()
-        ptr.setsize(height * width * 3)
-        return np.frombuffer(ptr.asstring(), dtype=np.uint8).reshape((height, width, 3))
+        # Qt pads scanlines to four bytes; copy before the temporary QImage dies.
+        rows = np.frombuffer(img.constBits(), dtype=np.uint8).reshape(height, img.bytesPerLine())
+        return rows[:, :width * 3].reshape(height, width, 3).copy()
 
     def reset_baselines(self):
         """Resets baseline states."""

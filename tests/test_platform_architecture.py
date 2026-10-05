@@ -5,8 +5,8 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtGui import QGuiApplication, QPixmap, QColor
-from PyQt6.QtCore import QRect
+from PySide6.QtGui import QGuiApplication, QPixmap, QColor
+from PySide6.QtCore import QRect
 
 from platform_api.factory import create_platform_backend
 from platform_api.backend import SourceTarget

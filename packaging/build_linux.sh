@@ -3,10 +3,13 @@ set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
+python_bin="${PYTHON_BIN:-python3}"
+if [[ -z "${PYTHON_BIN:-}" && -x "$repo_dir/.venv/bin/python" ]]; then
+  python_bin="$repo_dir/.venv/bin/python"
+fi
 
 # Build the tiny native client used for clean, unobscured Hyprland window
-# capture. It is bundled into the one-file release and extracted by PyInstaller
-# next to the Python entry point at runtime.
+# capture. The helper and replaceable Qt libraries live in the release folder.
 helper_build_dir="$(mktemp -d)"
 trap 'rm -rf "$helper_build_dir"' EXIT
 wayland-scanner client-header \
@@ -24,10 +27,14 @@ c++ -std=c++17 -O2 -I"$helper_build_dir" \
   $(pkg-config --cflags --libs wayland-client) \
   -o "$helper_build_dir/awc-hyprland-toplevel-capture"
 
-python3 -m PyInstaller --noconfirm --clean --onefile --windowed \
-  --name WorkCompanion-Linux-x86_64 \
+"$python_bin" -m PyInstaller --noconfirm --clean --onedir --windowed \
+  --name cupi-Linux-x86_64 \
+  --exclude-module PyQt6 --exclude-module PyQt5 --exclude-module PySide2 \
   --paths "$repo_dir" \
+  --specpath "$repo_dir/build/specs" \
+  --add-data "$repo_dir/assets:assets" \
   --add-binary "$helper_build_dir/awc-hyprland-toplevel-capture:." \
   packaging/portable_entry.py
+"$python_bin" packaging/release_bundle.py dist/cupi-Linux-x86_64
 mkdir -p releases
-cp "dist/WorkCompanion-Linux-x86_64" releases/
+tar -C dist -czf releases/cupi-Linux-x86_64.tar.gz cupi-Linux-x86_64

@@ -1,9 +1,9 @@
 import os
-import subprocess
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QFrame, QApplication
 )
-from PyQt6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from ui.styles import DARK_STYLE
 
 class SentinelLogDialog(QDialog):
@@ -119,7 +119,7 @@ class SentinelLogDialog(QDialog):
 
     def open_log_file(self):
         if self.logger.log_path.exists():
-            subprocess.run(["xdg-open", str(self.logger.log_path)])
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.logger.log_path.resolve())))
 
     def clear_log(self):
         self.logger.clear()

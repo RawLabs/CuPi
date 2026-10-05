@@ -1,8 +1,8 @@
 """Compatibility facade; new code should use PlatformBackend directly."""
 import base64
 from typing import Optional
-from PyQt6.QtCore import QBuffer, QIODevice, Qt
-from PyQt6.QtGui import QPixmap
+from PySide6.QtCore import QBuffer, QIODevice, Qt
+from PySide6.QtGui import QPixmap
 from platform_api import SourceTarget, get_platform_backend
 
 

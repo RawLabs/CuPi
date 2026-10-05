@@ -180,15 +180,17 @@ bool output_rgba(const FrameState& frame, const void* mapped) {
                 output[2] = pixel[0];
                 output[3] = frame.format == WL_SHM_FORMAT_ARGB8888 ? pixel[3] : 255;
             } else if (frame.format == WL_SHM_FORMAT_ABGR8888 || frame.format == WL_SHM_FORMAT_XBGR8888) {
-                output[0] = pixel[3];
-                output[1] = pixel[2];
-                output[2] = pixel[1];
-                output[3] = frame.format == WL_SHM_FORMAT_ABGR8888 ? pixel[0] : 255;
-            } else {
+                // Wayland format names describe 32-bit words. On little-
+                // endian hosts ABGR's bytes are R,G,B,A; RGBA's are A,B,G,R.
                 output[0] = pixel[0];
                 output[1] = pixel[1];
                 output[2] = pixel[2];
-                output[3] = frame.format == WL_SHM_FORMAT_RGBA8888 ? pixel[3] : 255;
+                output[3] = frame.format == WL_SHM_FORMAT_ABGR8888 ? pixel[3] : 255;
+            } else {
+                output[0] = pixel[3];
+                output[1] = pixel[2];
+                output[2] = pixel[1];
+                output[3] = frame.format == WL_SHM_FORMAT_RGBA8888 ? pixel[0] : 255;
             }
         }
         if (!write_all(row, static_cast<size_t>(frame.width) * 4)) {

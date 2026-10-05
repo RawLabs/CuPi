@@ -1,5 +1,5 @@
 import unittest
-from PyQt6.QtGui import QPixmap, QColor
+from PySide6.QtGui import QPixmap, QColor
 from ai.conversation import parse_annotations
 from capture.annotation_utils import draw_annotation_on_pixmap
 

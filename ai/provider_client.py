@@ -1,6 +1,6 @@
 import json
 import requests
-from PyQt6.QtCore import QThread, pyqtSignal
+from PySide6.QtCore import QThread, Signal
 from typing import List, Dict, Any, Optional
 
 
@@ -51,7 +51,7 @@ def describe_missing_completion(result: Any, provider: str, model: str) -> str:
 
 
 class ModelFetchWorker(QThread):
-    models_fetched = pyqtSignal(list, str)  # (model_metadata_list, error_message)
+    models_fetched = Signal(list, str)  # (model_metadata_list, error_message)
 
     def __init__(self, provider: str, base_url: str, api_key: str = ""):
         super().__init__()
@@ -66,8 +66,7 @@ class ModelFetchWorker(QThread):
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
             if self.provider == "openrouter":
-                headers["HTTP-Referer"] = "https://github.com/ai-work-companion"
-                headers["X-Title"] = "AI Work Companion"
+                headers["X-Title"] = "cupi"
 
             resp = requests.get(url, headers=headers, timeout=8)
             if resp.status_code == 200:
@@ -90,8 +89,8 @@ class ModelFetchWorker(QThread):
 
 
 class InferenceWorker(QThread):
-    response_ready = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
+    response_ready = Signal(str)
+    error_occurred = Signal(str)
 
     def __init__(self, provider: str, base_url: str, api_key: str, model: str, messages: List[Dict[str, Any]]):
         super().__init__()
@@ -109,13 +108,12 @@ class InferenceWorker(QThread):
                 "Authorization": f"Bearer {self.api_key}"
             }
             if self.provider == "openrouter":
-                headers["HTTP-Referer"] = "https://github.com/ai-work-companion"
-                headers["X-Title"] = "AI Work Companion"
+                headers["X-Title"] = "cupi"
 
             payload = {
                 "model": self.model,
                 "messages": self.messages,
-                "max_tokens": 1024,
+                "max_tokens": 4096,
                 "temperature": 0.3
             }
 
@@ -132,7 +130,10 @@ class InferenceWorker(QThread):
                         err_msg = result["error"].get("message", "Model provider returned an error structure.")
                         self.error_occurred.emit(f"Provider Error: {err_msg}")
                     elif content:
-                        self.response_ready.emit(str(content))
+                        text = str(content)
+                        if first_choice.get("finish_reason") == "length":
+                            text += "\n\n> This response reached the model output limit and may be incomplete. Ask for the remaining sections before exporting."
+                        self.response_ready.emit(text)
                     else:
                         raw_preview = json.dumps(result)[:150]
                         self.error_occurred.emit(f"Model returned empty content structure. Raw response: {raw_preview}")

@@ -1,5 +1,5 @@
 import unittest
-from PyQt6.QtCore import QRect
+from PySide6.QtCore import QRect
 from capture.sentinel_regions import scale_and_clamp_bbox, compute_iou
 
 class TestSentinelRegions(unittest.TestCase):

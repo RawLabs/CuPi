@@ -1,7 +1,7 @@
 import os
 import unittest
-from PyQt6.QtWidgets import QApplication
-from PyQt6.QtGui import QPixmap, QColor
+from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QPixmap, QColor
 from config import ConfigManager
 from ai.conversation import ConversationSession
 from capture.screen_capture import SourceTarget, pixmap_to_b64, list_screens, list_windows
@@ -12,6 +12,27 @@ _app = QApplication.instance() or QApplication([])
 
 
 class TestCompanion(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from storage import create_storage_backend
+
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        base = Path(temporary.name)
+        (base / "portable.flag").touch()
+        storage = create_storage_backend(base)
+        for target, value in (("config._DEFAULT_STORAGE", storage),
+                              ("config.CONFIG_FILE", storage.layout.config / "config.json")):
+            patcher = patch(target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        # UI tests must not contact a live provider or leave request threads.
+        patcher = patch("ui.companion_window.CompanionWindow.fetch_models")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_config_manager(self):
         cm = ConfigManager()
         cm.set("test_key", "test_val")
@@ -68,7 +89,7 @@ class TestCompanion(unittest.TestCase):
         self.assertIsNone(PickerOverlay._parse_native_geometry("not a geometry"))
 
     def test_window_capture_cropping(self):
-        from PyQt6.QtCore import QRect
+        from PySide6.QtCore import QRect
         from unittest.mock import patch
         from platform_api.linux_wayland import LinuxWaylandBackend
         target = SourceTarget(
@@ -89,7 +110,7 @@ class TestCompanion(unittest.TestCase):
             self.assertIn("visible window region", backend.last_capture_notice)
 
     def test_window_group_capture_is_one_spatial_composite(self):
-        from PyQt6.QtCore import QRect
+        from PySide6.QtCore import QRect
         from ui.companion_window import CompanionWindow
 
         first = SourceTarget("window", "first", "First", QRect(10, 20, 100, 50))
@@ -159,8 +180,8 @@ class TestCompanion(unittest.TestCase):
 
     def test_chat_message_renders_markdown(self):
         from ui.components import ChatMessageWidget
-        from PyQt6.QtCore import Qt
-        from PyQt6.QtWidgets import QLabel
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QLabel
 
         widget = ChatMessageWidget("assistant", "### Heading\n\n**Bold** and `code`")
         body = widget.findChild(QLabel, "MessageText")
@@ -202,7 +223,7 @@ class TestCompanion(unittest.TestCase):
 
     def test_save_screen_to_disk(self):
         from ui.companion_window import CompanionWindow
-        from PyQt6.QtGui import QPixmap, QColor
+        from PySide6.QtGui import QPixmap, QColor
         import tempfile
         from pathlib import Path
 
@@ -259,7 +280,7 @@ class TestCompanion(unittest.TestCase):
 
     def test_multi_image_conversation_bubble(self):
         from ui.components import ChatMessageWidget
-        from PyQt6.QtGui import QPixmap, QColor
+        from PySide6.QtGui import QPixmap, QColor
         pix1 = QPixmap(100, 100)
         pix1.fill(QColor(255, 0, 0))
         pix2 = QPixmap(100, 100)
@@ -270,7 +291,7 @@ class TestCompanion(unittest.TestCase):
 
     def test_finalized_doc_export(self):
         from export.document_exporter import DocumentExporter
-        from PyQt6.QtGui import QPixmap, QColor
+        from PySide6.QtGui import QPixmap, QColor
         import tempfile
         from pathlib import Path
 
@@ -310,7 +331,7 @@ class TestCompanion(unittest.TestCase):
 
     def test_annotation_drawing(self):
         from capture.annotation_utils import draw_annotation_on_pixmap
-        from PyQt6.QtGui import QPixmap, QColor
+        from PySide6.QtGui import QPixmap, QColor
         pix = QPixmap(200, 200)
         pix.fill(QColor(255, 255, 255))
         
@@ -320,7 +341,7 @@ class TestCompanion(unittest.TestCase):
 
     def test_annotation_dialog_init(self):
         from capture.annotation_dialog import AnnotationDialog
-        from PyQt6.QtGui import QPixmap, QColor
+        from PySide6.QtGui import QPixmap, QColor
         pix = QPixmap(200, 200)
         pix.fill(QColor(255, 255, 255))
         dlg = AnnotationDialog(pix)

@@ -1,5 +1,5 @@
 import numpy as np
-from PyQt6.QtCore import QRect
+from PySide6.QtCore import QRect
 from typing import Optional, List, Tuple
 
 def compute_iou(rect1: QRect, rect2: QRect) -> float:

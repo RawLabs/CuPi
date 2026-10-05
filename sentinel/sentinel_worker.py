@@ -1,6 +1,6 @@
 import time
-from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal, QThread
-from PyQt6.QtGui import QImage
+from PySide6.QtCore import QObject, Slot, Signal, QThread, QCoreApplication
+from PySide6.QtGui import QImage
 from capture.sentinel_engine import SentinelEngine, SentinelResult, SentinelMetrics, SentinelState
 from sentinel.sentinel_candidate import LatchedCandidateManager, CandidateRecord
 
@@ -10,9 +10,9 @@ class SentinelWorker(QObject):
     Consumes copied QImage frames sent from the main GUI thread.
     Integrates LatchedCandidateManager to suppress candidate loop spam.
     """
-    result_ready = pyqtSignal(object, dict)               # (SentinelResult, metadata)
-    candidate_toast_triggered = pyqtSignal(object)        # (CandidateRecord)
-    processing_finished = pyqtSignal()                    # Signal back to GUI thread
+    result_ready = Signal(object, dict)               # (SentinelResult, metadata)
+    candidate_toast_triggered = Signal(object)        # (CandidateRecord)
+    processing_finished = Signal()                    # Signal back to GUI thread
 
     def __init__(self, motion_enter_threshold: float = 0.030, full_scene_threshold: float = 0.35):
         super().__init__()
@@ -23,7 +23,7 @@ class SentinelWorker(QObject):
         self.metrics = SentinelMetrics()
         self.candidate_manager = LatchedCandidateManager()
 
-    @pyqtSlot(QImage, dict)
+    @Slot(QImage, dict)
     def process_frame(self, qimage: QImage, context: dict):
         start_time = time.monotonic()
         self.metrics.frames_processed += 1
@@ -69,7 +69,7 @@ class SentinelWorker(QObject):
         self.result_ready.emit(result, meta)
         self.processing_finished.emit()
 
-    @pyqtSlot()
+    @Slot()
     def reset(self):
         self.engine.reset_baselines()
         self.candidate_manager.clear_all()
@@ -80,16 +80,17 @@ class SentinelController(QObject):
     Controller managing the SentinelWorker and its owning QThread lifecycle.
     Created and owned by CompanionWindow on the GUI thread.
     """
-    frame_dispatch = pyqtSignal(QImage, dict)
+    frame_dispatch = Signal(QImage, dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.thread = QThread()
+        self.thread = QThread(QCoreApplication.instance())
         self.worker = SentinelWorker()
         self.worker.moveToThread(self.thread)
 
         # Wire up internal signals
         self.frame_dispatch.connect(self.worker.process_frame)
+        self.thread.finished.connect(self.worker.deleteLater)
         self.thread.start()
 
     def send_frame(self, qimage_copy: QImage, context: dict):
@@ -97,6 +98,5 @@ class SentinelController(QObject):
 
     def stop(self):
         if self.thread and self.thread.isRunning():
-            self.worker.reset()
             self.thread.quit()
             self.thread.wait(1000)

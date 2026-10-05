@@ -1,2 +1,2 @@
-cd /home/ghost/python-playground/ai_work_companion
- ./run.sh
+From the project directory:
+./run.sh
