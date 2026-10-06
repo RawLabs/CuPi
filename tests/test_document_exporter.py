@@ -46,10 +46,10 @@ class TestDocumentExporter(unittest.TestCase):
             pdf_bytes = Path(first['pdf_path']).read_bytes()
             self.assertTrue(pdf_bytes.startswith(b'%PDF'))
             self.assertIn(b'/Subtype /Image', pdf_bytes)
-            html = Path(first['html_path']).read_text()
+            html = Path(first['html_path']).read_text(encoding='utf-8')
             self.assertIn('data:image/png;base64,', html)
             self.assertNotIn('src="./images/', html)
-            self.assertEqual(Path(first['md_path']).read_text().count('# Sample Guide'), 1)
+            self.assertEqual(Path(first['md_path']).read_text(encoding='utf-8').count('# Sample Guide'), 1)
             with ZipFile(first['docx_path']) as word:
                 root = ET.fromstring(word.read('word/document.xml'))
                 ns = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}

@@ -34,13 +34,13 @@ def test_export_rejects_unattached_images_and_host_links(tmp_path):
             f'[image]: {private_path}\n\n[Run](javascript:alert(1))\n\n[File](file:///private)\n\n'
             '1. Legitimate step [Image 1]')
     result = DocumentExporter.export_finalized_doc(text, [evidence], 'Test', str(tmp_path / 'exports'))
-    markdown = Path(result['md_path']).read_text()
+    markdown = Path(result['md_path']).read_text(encoding='utf-8')
     assert str(private_path) not in markdown
     assert '../../private.png' not in markdown
     assert 'tracker.png' not in markdown
     assert 'javascript:' not in markdown
     assert 'file:///private' not in markdown
-    html = Path(result['html_path']).read_text()
+    html = Path(result['html_path']).read_text(encoding='utf-8')
     assert 'data:image/png;base64,' in html
     assert "img-src data:" in html
     with ZipFile(result['docx_path']) as document:
