@@ -8,7 +8,7 @@ python -m PyInstaller --noconfirm --clean --onedir --windowed `
   --exclude-module PyQt6 --exclude-module PyQt5 --exclude-module PySide2 `
   --paths $RepoDir `
   --specpath build/specs `
-  --add-data "assets;assets" `
+  --add-data "$RepoDir\assets;assets" `
   packaging/portable_entry.py
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 New-Item -ItemType Directory -Force releases | Out-Null
