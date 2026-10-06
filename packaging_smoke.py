@@ -30,7 +30,7 @@ def run_smoke_test(app):
         with ZipFile(result["docx_path"]) as document:
             if "word/document.xml" not in document.namelist():
                 raise RuntimeError("Word smoke output is invalid")
-        if "data:image/png;base64," not in Path(result["html_path"]).read_text():
+        if "data:image/png;base64," not in Path(result["html_path"]).read_text(encoding="utf-8"):
             raise RuntimeError("HTML evidence was not embedded")
         if window.platform.name == "linux-wayland":
             helper = window.platform._toplevel_capture_helper()

@@ -50,12 +50,14 @@ jobs:
         run: pwsh packaging/build_windows.ps1
 
       - if: runner.os == 'Linux'
+        timeout-minutes: 3
         run: ./dist/cupi-Linux-x86_64/cupi-Linux-x86_64 --smoke-test
         env:
           QT_QPA_PLATFORM: offscreen
           XDG_SESSION_TYPE: wayland
 
       - if: runner.os == 'Windows'
+        timeout-minutes: 3
         run: |
           $process = Start-Process ./dist/cupi-Windows-x64/cupi-Windows-x64.exe -ArgumentList '--smoke-test' -Wait -PassThru
           if ($process.ExitCode -ne 0) {
